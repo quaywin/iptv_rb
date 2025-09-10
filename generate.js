@@ -133,72 +133,76 @@ async function generateIPTVFile() {
   // Header của file M3U
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
 
-  let totalMatches = 0;
   let processedMatches = 0;
 
-  // Đếm tổng số trận đấu
+  // Gộp tất cả các trận từ mọi giải vào một mảng duy nhất, loại bỏ trận trùng
+  const matchMap = new Map();
   competitions.forEach((competition) => {
-    totalMatches += competition.matches.length;
+    competition.matches.forEach((match) => {
+      if (!matchMap.has(match._id)) {
+        matchMap.set(match._id, {
+          competition,
+          match,
+        });
+      }
+    });
   });
+  const allMatches = Array.from(matchMap.values());
+
+  // Sort tất cả các trận theo thời gian
+  allMatches.sort((a, b) => a.match.match_time - b.match.match_time);
 
   console.log(
-    `\nBắt đầu xử lý ${totalMatches} trận đấu trong ${competitions.length} giải đấu.`,
+    `\nBắt đầu xử lý ${allMatches.length} trận đấu đã được sắp xếp theo thời gian.`,
   );
 
-  // Duyệt qua từng giải đấu
-  for (const competition of competitions) {
-    console.log(
-      `\n📺 Đang xử lý giải đấu: ${competition.name} (${competition.matches.length} trận)`,
-    );
+  // Duyệt qua từng trận đã sort
+  for (const item of allMatches) {
+    const { competition, match } = item;
+    const homeTeam = match.home_team.short_name || match.home_team.name;
+    const awayTeam = match.away_team.short_name || match.away_team.name;
+    const matchDateTime = formatDateTime(match.match_time);
 
-    // Duyệt qua từng trận đấu trong giải
-    for (const match of competition.matches) {
-      const homeTeam = match.home_team.short_name || match.home_team.name;
-      const awayTeam = match.away_team.short_name || match.away_team.name;
-      const matchDateTime = formatDateTime(match.match_time);
+    console.log(`  ⚽ ${homeTeam} vs ${awayTeam} - ${matchDateTime}`);
 
-      console.log(`  ⚽ ${homeTeam} vs ${awayTeam} - ${matchDateTime}`);
+    for (const room of match.rooms) {
+      try {
+        const matchInfo = await getMatchInfo(room._id);
 
-      // Duyệt qua từng room của trận đấu
-      for (const room of match.rooms) {
-        try {
-          // Lấy thông tin chi tiết trận đấu
-          const matchInfo = await getMatchInfo(room._id);
+        if (
+          matchInfo &&
+          matchInfo.room &&
+          matchInfo.room.servers &&
+          matchInfo.room.servers.length > 0
+        ) {
+          const server = matchInfo.room.servers.find((s) => s.id == 4);
 
-          if (
-            matchInfo &&
-            matchInfo.room &&
-            matchInfo.room.servers &&
-            matchInfo.room.servers.length > 0
-          ) {
-            // Lấy server đầu tiên (có thể tùy chỉnh để chọn server khác)
-            const server = matchInfo.room.servers.find((s) => s.id == 4);
-
-            // Tạo tên kênh
+          if (server) {
+            // Chỉ thêm nếu tìm thấy server id==4
             let channelName = `${homeTeam} vs ${awayTeam} - ${matchDateTime}`;
             if (match.status_text === "live") {
               channelName = `🔴 | ${channelName}`;
             }
             const groupTitle = competition.short_name || competition.name;
 
-            // Thêm vào nội dung M3U
             m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
             m3uContent += `${server.stream_url}\n\n`;
 
             console.log(
               `    ✓ Đã thêm server: ${server.name} (${server.type})`,
             );
+            processedMatches++;
+            await delay(500);
+
+            break; // Nếu đã thêm thì dừng vòng lặp room
           } else {
-            console.log(`    ⚠ Không có server cho trận này`);
+            console.log(`    ⚠ Không có server id==4 cho trận này`);
           }
-
-          processedMatches++;
-
-          // Delay để tránh spam API
-          await delay(500);
-        } catch (error) {
-          console.error(`    ✗ Lỗi khi xử lý room ${room._id}:`, error.message);
+        } else {
+          console.log(`    ⚠ Không có server cho trận này`);
         }
+      } catch (error) {
+        console.error(`    ✗ Lỗi khi xử lý room ${room._id}:`, error.message);
       }
     }
   }
@@ -210,7 +214,7 @@ async function generateIPTVFile() {
     fs.writeFileSync(outputPath, m3uContent, "utf8");
     console.log(`\n✅ Đã tạo file IPTV thành công: ${outputPath}`);
     console.log(
-      `📊 Tổng cộng đã xử lý: ${processedMatches}/${totalMatches} trận đấu`,
+      `📊 Tổng cộng đã xử lý: ${processedMatches}/${allMatches.length} trận đấu`,
     );
 
     // Hiển thị thống kê
@@ -234,15 +238,6 @@ async function generateIPTVFile() {
 // Chạy script
 async function main() {
   console.log("🚀 Bắt đầu tạo file IPTV cho các trận bóng đá (2 ngày)...\n");
-
-  // Chạy với cấu hình nâng cao
-  // await generateAdvancedIPTVFile({
-  //   includeAllServers: false,
-  //   preferredServerType: "hls",
-  //   delayBetweenRequests: 300,
-  //   includeDateRange: true,
-  // });
-  //
   await generateIPTVFile();
 }
 
