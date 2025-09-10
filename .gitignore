@@ -1,1 +1,3 @@
 current_playlist.m3u
+node_modules/
+package-lock.json
