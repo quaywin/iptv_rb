@@ -8,9 +8,9 @@
     "generate": "node generate.js"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "node-cron": "^4.2.1"
   },
-  "devDependencies": {},
   "author": "Your Name",
   "license": "MIT",
   "repository": {
