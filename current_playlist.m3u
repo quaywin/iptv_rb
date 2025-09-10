@@ -1,86 +1,356 @@
 #EXTM3U tvg-shift=0 m3uautoload=1
 
-#EXTINF:-1 tvg-name="Australia U23 vs China U23 - 09/09/2025 18:35" group-title="AFC U23 Asian Cup",Australia U23 vs China U23 - 09/09/2025 18:35
-https://cr7.rbncdn.net/live/689c20a777c99958a671aa1d_vjxm8ghegw2nr6o_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="🔴 | Mexico vs South Korea - 10/09/2025 08:30" group-title="International Friendly",🔴 | Mexico vs South Korea - 10/09/2025 08:30
+https://cr7.rbncdn.net/live/689c8ed2d0757b966b83f774_pxwrxlhyv62jryk_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Vietnam U23 vs Yemen U23 - 09/09/2025 19:00" group-title="AFC U23 Asian Cup",Vietnam U23 vs Yemen U23 - 09/09/2025 19:00
-https://cr7.rbncdn.net/live/689c7d152eeb894ab75a5340_6ypq3nhv5n4ymd7_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="FK Kosmos Dolgoprudny vs Veles - 10/09/2025 18:30" group-title="Russian Cup",FK Kosmos Dolgoprudny vs Veles - 10/09/2025 18:30
+https://cr7.rbncdn.net/live/689c7d152eeb894ab75a5340_y39mp1h6k28wmoj_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Korea U23 vs Indonesia U23 - 09/09/2025 19:30" group-title="AFC U23 Asian Cup",Korea U23 vs Indonesia U23 - 09/09/2025 19:30
-https://cr7.rbncdn.net/live/689c8ed2d0757b966b83f774_318q66hx0g2gqo9_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Kristall MEZ Borisoglebsk vs FK Spartak Tambov - 10/09/2025 23:30" group-title="Russian Cup",Kristall MEZ Borisoglebsk vs FK Spartak Tambov - 10/09/2025 23:30
+https://cr7.rbncdn.net/live/689c20bb4aa468ea436d2cfd_dj2ryohldz33q1z_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Qatar U23 vs Bahrain U23 - 10/09/2025 00:00" group-title="AFC U23 Asian Cup",Qatar U23 vs Bahrain U23 - 10/09/2025 00:00
-https://cr7.rbncdn.net/live/_vjxm8ghegw9nr6o_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al-Ittihad Club vs Al Fateh - 13/09/2025 01:00" group-title="Saudi Professional League",Al-Ittihad Club vs Al Fateh - 13/09/2025 01:00
+https://cr7.rbncdn.net/live/_zp5rzghg1332q82_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="United Arab Emirates U23 vs Iran U23 - 10/09/2025 00:30" group-title="AFC U23 Asian Cup",United Arab Emirates U23 vs Iran U23 - 10/09/2025 00:30
-https://cr7.rbncdn.net/live/_1l4rjnh91l5xm7v_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al Khaleej Club vs Al-Fayha - 13/09/2025 22:25" group-title="Saudi Professional League",Al Khaleej Club vs Al-Fayha - 13/09/2025 22:25
+https://cr7.rbncdn.net/live/_4jwq2ghn1gzxm0v_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Burkina Faso vs Egypt - 09/09/2025 23:00" group-title="FIFA World Cup qualification (CAF)",Burkina Faso vs Egypt - 09/09/2025 23:00
-https://cr7.rbncdn.net/live/689c7d152eeb894ab75a5340_6ypq3nh352gymd7_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al Khaleej Club vs Al-Fayha - 13/09/2025 22:25" group-title="Saudi Professional League",Al Khaleej Club vs Al-Fayha - 13/09/2025 22:25
+https://cr7.rbncdn.net/live/_4jwq2ghn1gzxm0v_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="DR Congo vs Senegal - 09/09/2025 23:00" group-title="FIFA World Cup qualification (CAF)",DR Congo vs Senegal - 09/09/2025 23:00
-https://cr7.rbncdn.net/live/689c20cf37c4edde592f58ea_y0or5jhn4voxqwz_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al Khaleej Club vs Al-Fayha - 13/09/2025 22:25" group-title="Saudi Professional League",Al Khaleej Club vs Al-Fayha - 13/09/2025 22:25
+https://cr7.rbncdn.net/live/_4jwq2ghn1gzxm0v_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="South Africa vs Nigeria - 09/09/2025 23:00" group-title="FIFA World Cup qualification (CAF)",South Africa vs Nigeria - 09/09/2025 23:00
-https://cr7.rbncdn.net/live/689c8ef189c203e20dd33199_zp5rzgh57n6zq82_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al Khaleej Club vs Al-Fayha - 13/09/2025 22:25" group-title="Saudi Professional League",Al Khaleej Club vs Al-Fayha - 13/09/2025 22:25
+https://cr7.rbncdn.net/live/_4jwq2ghn1gzxm0v_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Cape Verde vs Cameroon - 09/09/2025 23:00" group-title="FIFA World Cup qualification (CAF)",Cape Verde vs Cameroon - 09/09/2025 23:00
-https://cr7.rbncdn.net/live/689c8fd35ae37172a548f9ed_965mkyhy4jyyr1g_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al-Okhdood vs Al Taawoun - 13/09/2025 22:45" group-title="Saudi Professional League",Al-Okhdood vs Al Taawoun - 13/09/2025 22:45
+https://cr7.rbncdn.net/live/_y0or5jh819n7qwz_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Mauritania vs South Sudan - 10/09/2025 02:00" group-title="FIFA World Cup qualification (CAF)",Mauritania vs South Sudan - 10/09/2025 02:00
-https://cr7.rbncdn.net/live/_jw2r09h2ne05rz8_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al-Okhdood vs Al Taawoun - 13/09/2025 22:45" group-title="Saudi Professional League",Al-Okhdood vs Al Taawoun - 13/09/2025 22:45
+https://cr7.rbncdn.net/live/_y0or5jh819n7qwz_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Benin vs Lesotho - 10/09/2025 02:00" group-title="FIFA World Cup qualification (CAF)",Benin vs Lesotho - 10/09/2025 02:00
-https://cr7.rbncdn.net/live/_vjxm8ghlgn5nr6o_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al-Okhdood vs Al Taawoun - 13/09/2025 22:45" group-title="Saudi Professional League",Al-Okhdood vs Al Taawoun - 13/09/2025 22:45
+https://cr7.rbncdn.net/live/_y0or5jh819n7qwz_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Angola vs Mauritius - 10/09/2025 02:00" group-title="FIFA World Cup qualification (CAF)",Angola vs Mauritius - 10/09/2025 02:00
-https://cr7.rbncdn.net/live/_x7lm7phzoljwm2w_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al-Okhdood vs Al Taawoun - 13/09/2025 22:45" group-title="Saudi Professional League",Al-Okhdood vs Al Taawoun - 13/09/2025 22:45
+https://cr7.rbncdn.net/live/_y0or5jh819n7qwz_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Gabon vs Cote d'Ivoire - 10/09/2025 02:00" group-title="FIFA World Cup qualification (CAF)",Gabon vs Cote d'Ivoire - 10/09/2025 02:00
-https://cr7.rbncdn.net/live/_8yomo4h3kwynq0j_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al-Hilal Saudi FC vs Al-Qadsiah - 14/09/2025 01:00" group-title="Saudi Professional League",Al-Hilal Saudi FC vs Al-Qadsiah - 14/09/2025 01:00
+https://cr7.rbncdn.net/live/_3glrw7hno4nwqdy_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Gambia vs Burundi - 10/09/2025 02:00" group-title="FIFA World Cup qualification (CAF)",Gambia vs Burundi - 10/09/2025 02:00
-https://cr7.rbncdn.net/live/_l5ergphw3zd6r8k_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al-Hilal Saudi FC vs Al-Qadsiah - 14/09/2025 01:00" group-title="Saudi Professional League",Al-Hilal Saudi FC vs Al-Qadsiah - 14/09/2025 01:00
+https://cr7.rbncdn.net/live/_3glrw7hno4nwqdy_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Azerbaijan vs Ukraine - 09/09/2025 23:00" group-title="FIFA World Cup qualification (UEFA)",Azerbaijan vs Ukraine - 09/09/2025 23:00
-https://cr7.rbncdn.net/live/689c20bb4aa468ea436d2cfd_l5ergphwx4n5r8k_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al-Riyadh vs Al Najma(KSA) - 14/09/2025 22:35" group-title="Saudi Professional League",Al-Riyadh vs Al Najma(KSA) - 14/09/2025 22:35
+https://cr7.rbncdn.net/live/_x7lm7phjpxzlm2w_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Armenia vs Ireland - 09/09/2025 23:00" group-title="FIFA World Cup qualification (UEFA)",Armenia vs Ireland - 09/09/2025 23:00
-https://cr7.rbncdn.net/live/689c9b0abe538a3f55a735b1_6ypq3nh3yvlvmd7_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al-Riyadh vs Al Najma(KSA) - 14/09/2025 22:35" group-title="Saudi Professional League",Al-Riyadh vs Al Najma(KSA) - 14/09/2025 22:35
+https://cr7.rbncdn.net/live/_x7lm7phjpxzlm2w_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Norway vs Moldova - 10/09/2025 01:45" group-title="FIFA World Cup qualification (UEFA)",Norway vs Moldova - 10/09/2025 01:45
-https://cr7.rbncdn.net/live/_3glrw7h72n68qdy_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Damac vs NEOM SC - 14/09/2025 22:50" group-title="Saudi Professional League",Damac vs NEOM SC - 14/09/2025 22:50
+https://cr7.rbncdn.net/live/_pxwrxlhyvl38ryk_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Albania vs Latvia - 10/09/2025 01:45" group-title="FIFA World Cup qualification (UEFA)",Albania vs Latvia - 10/09/2025 01:45
-https://cr7.rbncdn.net/live/_ednm9wh7ywegryo_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Damac vs NEOM SC - 14/09/2025 22:50" group-title="Saudi Professional League",Damac vs NEOM SC - 14/09/2025 22:50
+https://cr7.rbncdn.net/live/_pxwrxlhyvl38ryk_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Bosnia Herzegovina vs Austria - 10/09/2025 01:45" group-title="FIFA World Cup qualification (UEFA)",Bosnia Herzegovina vs Austria - 10/09/2025 01:45
-https://cr7.rbncdn.net/live/_4wyrn4hxp67oq86_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Al Nassr vs Al Kholood - 15/09/2025 01:00" group-title="Saudi Professional League",Al Nassr vs Al Kholood - 15/09/2025 01:00
+https://cr7.rbncdn.net/live/_23xmvkh6xy6xqg8_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Cyprus vs Romania - 10/09/2025 01:45" group-title="FIFA World Cup qualification (UEFA)",Cyprus vs Romania - 10/09/2025 01:45
-https://cr7.rbncdn.net/live/_8yomo4h3l15jq0j_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Bayer Leverkusen vs Eintracht Frankfurt - 13/09/2025 01:30" group-title="Bundesliga",Bayer Leverkusen vs Eintracht Frankfurt - 13/09/2025 01:30
+https://cr7.rbncdn.net/live/_zp5rzghg7653q82_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Serbia vs England - 10/09/2025 01:45" group-title="FIFA World Cup qualification (UEFA)",Serbia vs England - 10/09/2025 01:45
-https://cr7.rbncdn.net/live/_ednm9wh7yw00ryo_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Freiburg vs Stuttgart - 13/09/2025 20:30" group-title="Bundesliga",Freiburg vs Stuttgart - 13/09/2025 20:30
+https://cr7.rbncdn.net/live/_ednm9whw927lryo_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="France vs Iceland - 10/09/2025 01:45" group-title="FIFA World Cup qualification (UEFA)",France vs Iceland - 10/09/2025 01:45
-https://cr7.rbncdn.net/live/_4jwq2gheyg52m0v_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Heidenheim vs Dortmund - 13/09/2025 20:30" group-title="Bundesliga",Heidenheim vs Dortmund - 13/09/2025 20:30
+https://cr7.rbncdn.net/live/_965mkyhk42yxr1g_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Hungary vs Portugal - 10/09/2025 01:45" group-title="FIFA World Cup qualification (UEFA)",Hungary vs Portugal - 10/09/2025 01:45
-https://cr7.rbncdn.net/live/_ednm9wh7y5p3ryo_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Mainz vs RB Leipzig - 13/09/2025 20:30" group-title="Bundesliga",Mainz vs RB Leipzig - 13/09/2025 20:30
+https://cr7.rbncdn.net/live/_y39mp1h650zgmoj_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Ecuador vs Argentina - 10/09/2025 06:00" group-title="FIFA World Cup qualification (CONMEBOL)",Ecuador vs Argentina - 10/09/2025 06:00
-https://cr7.rbncdn.net/live/_n54qllh72ldkqvy_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Union Berlin vs Hoffenheim - 13/09/2025 20:30" group-title="Bundesliga",Union Berlin vs Hoffenheim - 13/09/2025 20:30
+https://cr7.rbncdn.net/live/_318q66hx06w5qo9_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Bolivia vs Brazil - 10/09/2025 06:30" group-title="FIFA World Cup qualification (CONMEBOL)",Bolivia vs Brazil - 10/09/2025 06:30
-https://cr7.rbncdn.net/live/_x7lm7phzklp9m2w_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Wolfsburg vs FC Köln - 13/09/2025 20:30" group-title="Bundesliga",Wolfsburg vs FC Köln - 13/09/2025 20:30
+https://cr7.rbncdn.net/live/_dn1m1ghlep25moe_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Venezuela vs Colombia - 10/09/2025 06:30" group-title="FIFA World Cup qualification (CONMEBOL)",Venezuela vs Colombia - 10/09/2025 06:30
-https://cr7.rbncdn.net/live/_y0or5jhnlv11qwz_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Bayern Munich vs Hamburger SV - 13/09/2025 23:30" group-title="Bundesliga",Bayern Munich vs Hamburger SV - 13/09/2025 23:30
+https://cr7.rbncdn.net/live/_1l4rjnh91j4gm7v_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Chile vs Uruguay - 10/09/2025 06:30" group-title="FIFA World Cup qualification (CONMEBOL)",Chile vs Uruguay - 10/09/2025 06:30
-https://cr7.rbncdn.net/live/_23xmvkh83exwqg8_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="St. Pauli vs Augsburg - 14/09/2025 20:30" group-title="Bundesliga",St. Pauli vs Augsburg - 14/09/2025 20:30
+https://cr7.rbncdn.net/live/_k82rekhg90wkrep_football_fhd/playlist.m3u8
 
-#EXTINF:-1 tvg-name="Peru vs Paraguay - 10/09/2025 06:30" group-title="FIFA World Cup qualification (CONMEBOL)",Peru vs Paraguay - 10/09/2025 06:30
-https://cr7.rbncdn.net/live/_zp5rzgh5jn14q82_football_fhd/playlist.m3u8
+#EXTINF:-1 tvg-name="Borussia M’gladbach vs Werder Bremen - 14/09/2025 22:30" group-title="Bundesliga",Borussia M’gladbach vs Werder Bremen - 14/09/2025 22:30
+https://cr7.rbncdn.net/live/_4jwq2ghnkze5m0v_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="OM vs Lorient - 13/09/2025 01:45" group-title="French Ligue 1",OM vs Lorient - 13/09/2025 01:45
+https://cr7.rbncdn.net/live/_23xmvkh6o8okqg8_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Nice vs Nantes - 13/09/2025 22:00" group-title="French Ligue 1",Nice vs Nantes - 13/09/2025 22:00
+https://cr7.rbncdn.net/live/_1l4rjnh9141em7v_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Auxerre vs Monaco - 14/09/2025 02:05" group-title="French Ligue 1",Auxerre vs Monaco - 14/09/2025 02:05
+https://cr7.rbncdn.net/live/_x7lm7phjozokm2w_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Auxerre vs Monaco - 14/09/2025 02:05" group-title="French Ligue 1",Auxerre vs Monaco - 14/09/2025 02:05
+https://cr7.rbncdn.net/live/_x7lm7phjozokm2w_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="LOSC vs Toulouse - 14/09/2025 20:00" group-title="French Ligue 1",LOSC vs Toulouse - 14/09/2025 20:00
+https://cr7.rbncdn.net/live/_n54qllhne7exqvy_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="LOSC vs Toulouse - 14/09/2025 20:00" group-title="French Ligue 1",LOSC vs Toulouse - 14/09/2025 20:00
+https://cr7.rbncdn.net/live/_n54qllhne7exqvy_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="PSG vs Lens - 14/09/2025 22:15" group-title="French Ligue 1",PSG vs Lens - 14/09/2025 22:15
+https://cr7.rbncdn.net/live/_4jwq2ghnkek0m0v_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="PSG vs Lens - 14/09/2025 22:15" group-title="French Ligue 1",PSG vs Lens - 14/09/2025 22:15
+https://cr7.rbncdn.net/live/_4jwq2ghnkek0m0v_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Strasbourg vs Havre AC - 14/09/2025 22:15" group-title="French Ligue 1",Strasbourg vs Havre AC - 14/09/2025 22:15
+https://cr7.rbncdn.net/live/_965mkyhk4y45r1g_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Strasbourg vs Havre AC - 14/09/2025 22:15" group-title="French Ligue 1",Strasbourg vs Havre AC - 14/09/2025 22:15
+https://cr7.rbncdn.net/live/_965mkyhk4y45r1g_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Brest vs Paris FC - 14/09/2025 22:15" group-title="French Ligue 1",Brest vs Paris FC - 14/09/2025 22:15
+https://cr7.rbncdn.net/live/_y0or5jh84n44qwz_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Brest vs Paris FC - 14/09/2025 22:15" group-title="French Ligue 1",Brest vs Paris FC - 14/09/2025 22:15
+https://cr7.rbncdn.net/live/_y0or5jh84n44qwz_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Metz vs Angers - 14/09/2025 22:15" group-title="French Ligue 1",Metz vs Angers - 14/09/2025 22:15
+https://cr7.rbncdn.net/live/_zp5rzghg757xq82_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Metz vs Angers - 14/09/2025 22:15" group-title="French Ligue 1",Metz vs Angers - 14/09/2025 22:15
+https://cr7.rbncdn.net/live/_zp5rzghg757xq82_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Rennes vs OL - 15/09/2025 01:45" group-title="French Ligue 1",Rennes vs OL - 15/09/2025 01:45
+https://cr7.rbncdn.net/live/_ednm9whw9796ryo_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Rennes vs OL - 15/09/2025 01:45" group-title="French Ligue 1",Rennes vs OL - 15/09/2025 01:45
+https://cr7.rbncdn.net/live/_ednm9whw9796ryo_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Sevilla vs Elche CF - 13/09/2025 02:00" group-title="Spanish La Liga",Sevilla vs Elche CF - 13/09/2025 02:00
+https://cr7.rbncdn.net/live/_4wyrn4h6d9ooq86_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Getafe vs Real Oviedo - 13/09/2025 19:00" group-title="Spanish La Liga",Getafe vs Real Oviedo - 13/09/2025 19:00
+https://cr7.rbncdn.net/live/_965mkyhk3z2zr1g_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Real Sociedad vs Real Madrid - 13/09/2025 21:15" group-title="Spanish La Liga",Real Sociedad vs Real Madrid - 13/09/2025 21:15
+https://cr7.rbncdn.net/live/_jw2r09hkx16krz8_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Ath Bilbao vs Alavés - 13/09/2025 23:30" group-title="Spanish La Liga",Ath Bilbao vs Alavés - 13/09/2025 23:30
+https://cr7.rbncdn.net/live/_318q66hxvk62qo9_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Atl. Madrid vs Villarreal - 14/09/2025 02:00" group-title="Spanish La Liga",Atl. Madrid vs Villarreal - 14/09/2025 02:00
+https://cr7.rbncdn.net/live/_y0or5jh8e1o7qwz_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Celta vs Girona - 14/09/2025 19:00" group-title="Spanish La Liga",Celta vs Girona - 14/09/2025 19:00
+https://cr7.rbncdn.net/live/_l7oqdehg418jr51_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Levante vs Real Betis - 14/09/2025 21:15" group-title="Spanish La Liga",Levante vs Real Betis - 14/09/2025 21:15
+https://cr7.rbncdn.net/live/_dn1m1ghln1p0moe_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Osasuna vs Vallecano - 14/09/2025 23:30" group-title="Spanish La Liga",Osasuna vs Vallecano - 14/09/2025 23:30
+https://cr7.rbncdn.net/live/_k82rekhgy10nrep_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Barcelona vs Valencia - 15/09/2025 02:00" group-title="Spanish La Liga",Barcelona vs Valencia - 15/09/2025 02:00
+https://cr7.rbncdn.net/live/_1l4rjnh9zejzm7v_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Espanyol vs Mallorca - 16/09/2025 02:00" group-title="Spanish La Liga",Espanyol vs Mallorca - 16/09/2025 02:00
+https://cr7.rbncdn.net/live/_ednm9whwze2gryo_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Alverca vs CD Tondela - 13/09/2025 02:15" group-title="Portuguese Primera Liga",Alverca vs CD Tondela - 13/09/2025 02:15
+https://cr7.rbncdn.net/live/_dj2ryohlgv0dq1z_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Benfica vs Santa Clara - 13/09/2025 02:15" group-title="Portuguese Primera Liga",Benfica vs Santa Clara - 13/09/2025 02:15
+https://cr7.rbncdn.net/live/_8yomo4h1veoxq0j_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Estoril vs AVS Futebol SAD - 13/09/2025 21:30" group-title="Portuguese Primera Liga",Estoril vs AVS Futebol SAD - 13/09/2025 21:30
+https://cr7.rbncdn.net/live/_pxwrxlhyjpoxryk_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Moreirense vs Rio Ave - 13/09/2025 21:30" group-title="Portuguese Primera Liga",Moreirense vs Rio Ave - 13/09/2025 21:30
+https://cr7.rbncdn.net/live/_y0or5jh83xk5qwz_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="FC Porto vs Nacional da Madeira - 14/09/2025 00:00" group-title="Portuguese Primera Liga",FC Porto vs Nacional da Madeira - 14/09/2025 00:00
+https://cr7.rbncdn.net/live/_x7lm7phjwgexm2w_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="FC Famalicao vs SCP - 14/09/2025 02:30" group-title="Portuguese Primera Liga",FC Famalicao vs SCP - 14/09/2025 02:30
+https://cr7.rbncdn.net/live/_vjxm8ghe8v6er6o_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="CFEA vs Vitoria Guimaraes - 14/09/2025 21:30" group-title="Portuguese Primera Liga",CFEA vs Vitoria Guimaraes - 14/09/2025 21:30
+https://cr7.rbncdn.net/live/_3glrw7hnyk57qdy_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="FC Arouca vs Casa Pia AC - 15/09/2025 00:00" group-title="Portuguese Primera Liga",FC Arouca vs Casa Pia AC - 15/09/2025 00:00
+https://cr7.rbncdn.net/live/_2y8m4zh5809nql0_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Sporting Braga vs Gil Vicente - 15/09/2025 02:30" group-title="Portuguese Primera Liga",Sporting Braga vs Gil Vicente - 15/09/2025 02:30
+https://cr7.rbncdn.net/live/_6ypq3nhvw6onmd7_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Arsenal vs Nott'm Forest - 13/09/2025 18:30" group-title="English Premier League",Arsenal vs Nott'm Forest - 13/09/2025 18:30
+https://cr7.rbncdn.net/live/_l5ergph43eepr8k_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Crystal Palace vs Sunderland - 13/09/2025 21:00" group-title="English Premier League",Crystal Palace vs Sunderland - 13/09/2025 21:00
+https://cr7.rbncdn.net/live/_pxwrxlhy1jjyryk_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Everton vs Aston Villa - 13/09/2025 21:00" group-title="English Premier League",Everton vs Aston Villa - 13/09/2025 21:00
+https://cr7.rbncdn.net/live/_vjxm8gheg880r6o_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Fulham vs Leeds United - 13/09/2025 21:00" group-title="English Premier League",Fulham vs Leeds United - 13/09/2025 21:00
+https://cr7.rbncdn.net/live/_y0or5jh8433dqwz_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Newcastle vs Wolves - 13/09/2025 21:00" group-title="English Premier League",Newcastle vs Wolves - 13/09/2025 21:00
+https://cr7.rbncdn.net/live/_ednm9whw9vv1ryo_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Bournemouth vs Brighton - 13/09/2025 21:00" group-title="English Premier League",Bournemouth vs Brighton - 13/09/2025 21:00
+https://cr7.rbncdn.net/live/_k82rekhg9ojdrep_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="West Ham vs Spurs - 13/09/2025 23:30" group-title="English Premier League",West Ham vs Spurs - 13/09/2025 23:30
+https://cr7.rbncdn.net/live/_y39mp1h65y13moj_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Brentford vs Chelsea - 14/09/2025 02:00" group-title="English Premier League",Brentford vs Chelsea - 14/09/2025 02:00
+https://cr7.rbncdn.net/live/_l7oqdehg600dr51_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Brentford vs Chelsea - 14/09/2025 02:00" group-title="English Premier League",Brentford vs Chelsea - 14/09/2025 02:00
+https://cr7.rbncdn.net/live/_l7oqdehg600dr51_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Burnley vs Liverpool - 14/09/2025 20:00" group-title="English Premier League",Burnley vs Liverpool - 14/09/2025 20:00
+https://cr7.rbncdn.net/live/_8yomo4h1kvvgq0j_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Burnley vs Liverpool - 14/09/2025 20:00" group-title="English Premier League",Burnley vs Liverpool - 14/09/2025 20:00
+https://cr7.rbncdn.net/live/_8yomo4h1kvvgq0j_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Man City vs Man Utd - 14/09/2025 22:30" group-title="English Premier League",Man City vs Man Utd - 14/09/2025 22:30
+https://cr7.rbncdn.net/live/_zp5rzghg7ppkq82_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Man City vs Man Utd - 14/09/2025 22:30" group-title="English Premier League",Man City vs Man Utd - 14/09/2025 22:30
+https://cr7.rbncdn.net/live/_zp5rzghg7ppkq82_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Cong An Ha Noi FC vs Hai Phong FC - 13/09/2025 19:15" group-title="Vietnam National Champion League",Cong An Ha Noi FC vs Hai Phong FC - 13/09/2025 19:15
+https://cr7.rbncdn.net/live/_vjxm8ghexx1nr6o_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="CLB BCAHCM vs Nam Dinh FC - 13/09/2025 19:15" group-title="Vietnam National Champion League",CLB BCAHCM vs Nam Dinh FC - 13/09/2025 19:15
+https://cr7.rbncdn.net/live/_x7lm7phjpp64m2w_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Cagliari vs Parma - 13/09/2025 20:00" group-title="Italian Serie A",Cagliari vs Parma - 13/09/2025 20:00
+https://cr7.rbncdn.net/live/_zp5rzghgjlv0q82_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Juventus vs Inter - 13/09/2025 23:00" group-title="Italian Serie A",Juventus vs Inter - 13/09/2025 23:00
+https://cr7.rbncdn.net/live/_ednm9whwk3y2ryo_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Fiorentina vs Napoli - 14/09/2025 01:45" group-title="Italian Serie A",Fiorentina vs Napoli - 14/09/2025 01:45
+https://cr7.rbncdn.net/live/_4jwq2ghn43y9m0v_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="AS Roma vs Torino - 14/09/2025 17:30" group-title="Italian Serie A",AS Roma vs Torino - 14/09/2025 17:30
+https://cr7.rbncdn.net/live/_n54qllhn2ogdqvy_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Atalanta vs Lecce - 14/09/2025 20:00" group-title="Italian Serie A",Atalanta vs Lecce - 14/09/2025 20:00
+https://cr7.rbncdn.net/live/_23xmvkh63n1gqg8_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Pisa vs Udinese - 14/09/2025 20:00" group-title="Italian Serie A",Pisa vs Udinese - 14/09/2025 20:00
+https://cr7.rbncdn.net/live/_965mkyhk76dyr1g_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Sassuolo vs Lazio - 14/09/2025 23:00" group-title="Italian Serie A",Sassuolo vs Lazio - 14/09/2025 23:00
+https://cr7.rbncdn.net/live/_y39mp1h632g6moj_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Milan vs Bologna - 15/09/2025 01:45" group-title="Italian Serie A",Milan vs Bologna - 15/09/2025 01:45
+https://cr7.rbncdn.net/live/_y0or5jh8l2ygqwz_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Verona vs Cremonese - 15/09/2025 23:30" group-title="Italian Serie A",Verona vs Cremonese - 15/09/2025 23:30
+https://cr7.rbncdn.net/live/_k82rekhgv7p2rep_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Como vs Genoa - 16/09/2025 01:45" group-title="Italian Serie A",Como vs Genoa - 16/09/2025 01:45
+https://cr7.rbncdn.net/live/_1l4rjnh96wo5m7v_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="AFC Ajax vs PEC Zwolle - 13/09/2025 21:30" group-title="Netherlands Eredivisie",AFC Ajax vs PEC Zwolle - 13/09/2025 21:30
+https://cr7.rbncdn.net/live/_l5ergph43pder8k_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="NEC Nijmegen vs PSV Eindhoven - 13/09/2025 23:45" group-title="Netherlands Eredivisie",NEC Nijmegen vs PSV Eindhoven - 13/09/2025 23:45
+https://cr7.rbncdn.net/live/_8yomo4h1kz1vq0j_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Go Ahead Eagles vs Volendam - 13/09/2025 23:45" group-title="Netherlands Eredivisie",Go Ahead Eagles vs Volendam - 13/09/2025 23:45
+https://cr7.rbncdn.net/live/_k82rekhg912zrep_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Feyenoord vs SC Heerenveen - 14/09/2025 02:00" group-title="Netherlands Eredivisie",Feyenoord vs SC Heerenveen - 14/09/2025 02:00
+https://cr7.rbncdn.net/live/_dj2ryohly2pdq1z_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="FC Twente Enschede vs NAC Breda - 14/09/2025 02:00" group-title="Netherlands Eredivisie",FC Twente Enschede vs NAC Breda - 14/09/2025 02:00
+https://cr7.rbncdn.net/live/_k82rekhg91jzrep_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Excelsior SBV vs Sparta Rotterdam - 14/09/2025 17:15" group-title="Netherlands Eredivisie",Excelsior SBV vs Sparta Rotterdam - 14/09/2025 17:15
+https://cr7.rbncdn.net/live/_n54qllhned3wqvy_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Heracles Almelo vs AZ Alkmaar - 14/09/2025 19:30" group-title="Netherlands Eredivisie",Heracles Almelo vs AZ Alkmaar - 14/09/2025 19:30
+https://cr7.rbncdn.net/live/_jw2r09hkn15wrz8_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="FC Utrecht vs Groningen - 14/09/2025 19:30" group-title="Netherlands Eredivisie",FC Utrecht vs Groningen - 14/09/2025 19:30
+https://cr7.rbncdn.net/live/_pxwrxlhy1vlxryk_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="SC Telstar vs Fortuna Sittard - 14/09/2025 21:45" group-title="Netherlands Eredivisie",SC Telstar vs Fortuna Sittard - 14/09/2025 21:45
+https://cr7.rbncdn.net/live/_1l4rjnh91egom7v_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Montreal Impact vs St. Louis City SC - 14/09/2025 06:30" group-title="United States Major League Soccer",Montreal Impact vs St. Louis City SC - 14/09/2025 06:30
+https://cr7.rbncdn.net/live/_318q66hwyp2gqo9_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="New England Revolution vs Toronto FC - 14/09/2025 06:30" group-title="United States Major League Soccer",New England Revolution vs Toronto FC - 14/09/2025 06:30
+https://cr7.rbncdn.net/live/_23xmvkh81j0oqg8_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Charlotte FC vs Club Internacional de Futbol Miami - 14/09/2025 06:30" group-title="United States Major League Soccer",Charlotte FC vs Club Internacional de Futbol Miami - 14/09/2025 06:30
+https://cr7.rbncdn.net/live/_4jwq2gheyjz7m0v_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="FC Cincinnati vs Nashville SC - 14/09/2025 06:30" group-title="United States Major League Soccer",FC Cincinnati vs Nashville SC - 14/09/2025 06:30
+https://cr7.rbncdn.net/live/_l7oqdehowk8xr51_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Atlanta United vs Columbus Crew - 14/09/2025 06:30" group-title="United States Major League Soccer",Atlanta United vs Columbus Crew - 14/09/2025 06:30
+https://cr7.rbncdn.net/live/_pxwrxlh58ox4ryk_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="DC United vs Orlando City - 14/09/2025 06:30" group-title="United States Major League Soccer",DC United vs Orlando City - 14/09/2025 06:30
+https://cr7.rbncdn.net/live/_3glrw7h7253vqdy_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="San Jose Earthquakes vs Los Angeles FC - 14/09/2025 07:30" group-title="United States Major League Soccer",San Jose Earthquakes vs Los Angeles FC - 14/09/2025 07:30
+https://cr7.rbncdn.net/live/_vjxm8ghld6wnr6o_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Chicago Fire vs New York City Football Club - 14/09/2025 07:30" group-title="United States Major League Soccer",Chicago Fire vs New York City Football Club - 14/09/2025 07:30
+https://cr7.rbncdn.net/live/_y39mp1hzgn0pmoj_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Seattle Sounders vs LA Galaxy - 14/09/2025 07:30" group-title="United States Major League Soccer",Seattle Sounders vs LA Galaxy - 14/09/2025 07:30
+https://cr7.rbncdn.net/live/_dj2ryoh160e9q1z_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="FC Dallas vs Austin FC - 14/09/2025 07:30" group-title="United States Major League Soccer",FC Dallas vs Austin FC - 14/09/2025 07:30
+https://cr7.rbncdn.net/live/_l5ergphwx6w6r8k_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Vancouver Whitecaps vs Philadelphia Union - 14/09/2025 08:30" group-title="United States Major League Soccer",Vancouver Whitecaps vs Philadelphia Union - 14/09/2025 08:30
+https://cr7.rbncdn.net/live/_jw2r09h2yv95rz8_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Colorado Rapids vs Houston Dynamo - 14/09/2025 08:30" group-title="United States Major League Soccer",Colorado Rapids vs Houston Dynamo - 14/09/2025 08:30
+https://cr7.rbncdn.net/live/_l5ergphwx684r8k_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Real Salt Lake vs Sporting Kansas City - 14/09/2025 08:30" group-title="United States Major League Soccer",Real Salt Lake vs Sporting Kansas City - 14/09/2025 08:30
+https://cr7.rbncdn.net/live/_1l4rjnh4o045m7v_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Portland Timbers vs New York Red Bulls - 14/09/2025 09:30" group-title="United States Major League Soccer",Portland Timbers vs New York Red Bulls - 14/09/2025 09:30
+https://cr7.rbncdn.net/live/_y39mp1hzgnwpmoj_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="San Diego FC vs Minnesota United FC - 14/09/2025 09:30" group-title="United States Major League Soccer",San Diego FC vs Minnesota United FC - 14/09/2025 09:30
+https://cr7.rbncdn.net/live/_dn1m1gh2yz0pmoe_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Krylya Sovetov vs FC Sochi - 14/09/2025 18:30" group-title="Russian Premier League",Krylya Sovetov vs FC Sochi - 14/09/2025 18:30
+https://cr7.rbncdn.net/live/_y0or5jh8e3e1qwz_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Krylya Sovetov vs FC Sochi - 14/09/2025 18:30" group-title="Russian Premier League",Krylya Sovetov vs FC Sochi - 14/09/2025 18:30
+https://cr7.rbncdn.net/live/_y0or5jh8e3e1qwz_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Baltika Kaliningrad vs Zenit StPetersburg - 14/09/2025 21:00" group-title="Russian Premier League",Baltika Kaliningrad vs Zenit StPetersburg - 14/09/2025 21:00
+https://cr7.rbncdn.net/live/_pxwrxlhy9j91ryk_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Baltika Kaliningrad vs Zenit StPetersburg - 14/09/2025 21:00" group-title="Russian Premier League",Baltika Kaliningrad vs Zenit StPetersburg - 14/09/2025 21:00
+https://cr7.rbncdn.net/live/_pxwrxlhy9j91ryk_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="Ath Bilbao vs Arsenal - 16/09/2025 23:45" group-title="UEFA Champions League",Ath Bilbao vs Arsenal - 16/09/2025 23:45
+https://cr7.rbncdn.net/live/_dn1m1ghlo705moe_football_fhd/playlist.m3u8
+
+#EXTINF:-1 tvg-name="PSV Eindhoven vs Union Saint-Gilloise - 16/09/2025 23:45" group-title="UEFA Champions League",PSV Eindhoven vs Union Saint-Gilloise - 16/09/2025 23:45
+https://cr7.rbncdn.net/live/_8yomo4h15x84q0j_football_fhd/playlist.m3u8
 

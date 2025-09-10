@@ -49,78 +49,41 @@ async function getMatchListForDate(dateString) {
 
 // Hàm gọi API để lấy danh sách trận đấu cho hôm nay và ngày mai
 async function getMatchList() {
-  const yesterday = getFormattedDate(-1);
-  const today = getFormattedDate(0); // Ngày hôm nay
-  const tomorrow = getFormattedDate(1); // Ngày mai
+  const daysToFetch = 8; // hôm qua + hôm nay + 6 ngày tiếp theo
+  const dateStrings = [];
+  for (let i = -1; i < daysToFetch - 1; i++) {
+    dateStrings.push(getFormattedDate(i));
+  }
 
-  console.log(`Đang lấy dữ liệu cho ngày hôm qua: ${yesterday}`);
-  console.log(`Đang lấy dữ liệu cho ngày hôm nay: ${today}`);
-  console.log(`Đang lấy dữ liệu cho ngày mai: ${tomorrow}`);
+  console.log(`Đang lấy dữ liệu cho các ngày: ${dateStrings.join(", ")}`);
 
   try {
     // Gọi API song song cho cả 2 ngày
-    const [yesterdayMatches, todayMatches, tomorrowMatches] = await Promise.all(
-      [
-        getMatchListForDate(yesterday),
-        getMatchListForDate(today),
-        getMatchListForDate(tomorrow),
-      ],
+    const matchesByDay = await Promise.all(
+      dateStrings.map((date) => getMatchListForDate(date)),
     );
 
-    console.log(`Hôm qua (${yesterday}): ${yesterdayMatches.length} giải đấu`);
-    console.log(`Hôm nay (${today}): ${todayMatches.length} giải đấu`);
-    console.log(`Ngày mai (${tomorrow}): ${tomorrowMatches.length} giải đấu`);
+    const allMatches = [].concat(...matchesByDay);
 
     // Gộp kết quả từ 2 ngày
     const allCompetitions = [];
     const competitionMap = new Map();
 
-    yesterdayMatches.forEach((competition) => {
+    allMatches.forEach((competition) => {
+      if (!competition || !competition._id) return;
       if (competitionMap.has(competition._id)) {
-        // Nếu giải đấu đã tồn tại, thêm trận đấu vào
         competitionMap
           .get(competition._id)
           .matches.push(...competition.matches);
       } else {
-        // Thêm giải đấu mới
-        competitionMap.set(competition._id, { ...competition });
-      }
-    });
-
-    // Xử lý trận đấu hôm nay
-    todayMatches.forEach((competition) => {
-      if (competitionMap.has(competition._id)) {
-        // Nếu giải đấu đã tồn tại, thêm trận đấu vào
-        competitionMap
-          .get(competition._id)
-          .matches.push(...competition.matches);
-      } else {
-        // Thêm giải đấu mới
-        competitionMap.set(competition._id, { ...competition });
-      }
-    });
-
-    // Xử lý trận đấu ngày mai
-    tomorrowMatches.forEach((competition) => {
-      if (competitionMap.has(competition._id)) {
-        // Nếu giải đấu đã tồn tại, thêm trận đấu vào
-        competitionMap
-          .get(competition._id)
-          .matches.push(...competition.matches);
-      } else {
-        // Thêm giải đấu mới
         competitionMap.set(competition._id, { ...competition });
       }
     });
 
     // Chuyển Map thành Array
     competitionMap.forEach((competition) => {
-      allCompetitions.push(competition);
-    });
-
-    // Sắp xếp trận đấu theo thời gian
-    allCompetitions.forEach((competition) => {
       competition.matches.sort((a, b) => a.match_time - b.match_time);
+      allCompetitions.push(competition);
     });
 
     const totalMatches = allCompetitions.reduce(
@@ -212,7 +175,10 @@ async function generateIPTVFile() {
             const server = matchInfo.room.servers.find((s) => s.id == 4);
 
             // Tạo tên kênh
-            const channelName = `${homeTeam} vs ${awayTeam} - ${matchDateTime}`;
+            let channelName = `${homeTeam} vs ${awayTeam} - ${matchDateTime}`;
+            if (match.status_text === "live") {
+              channelName = `🔴 | ${channelName}`;
+            }
             const groupTitle = competition.short_name || competition.name;
 
             // Thêm vào nội dung M3U
@@ -263,137 +229,6 @@ async function generateIPTVFile() {
   } catch (error) {
     console.error("❌ Lỗi khi lưu file:", error);
   }
-}
-
-// Hàm tạo file với tùy chọn nâng cao
-async function generateAdvancedIPTVFile(options = {}) {
-  const {
-    includeAllServers = false,
-    preferredServerType = "hls",
-    outputFileName = null, // Sẽ auto generate với ngày
-    delayBetweenRequests = 300,
-    includeDateRange = true, // Có bao gồm ngày trong tên file không
-  } = options;
-
-  console.log("🔧 Cấu hình:");
-  console.log(`  - Bao gồm tất cả servers: ${includeAllServers}`);
-  console.log(`  - Ưu tiên server type: ${preferredServerType}`);
-  console.log(`  - Delay giữa requests: ${delayBetweenRequests}ms`);
-
-  const competitions = await getMatchList();
-
-  if (competitions.length === 0) {
-    console.log("Không có trận đấu nào được tìm thấy.");
-    return;
-  }
-
-  let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
-
-  let totalMatches = 0;
-  let processedMatches = 0;
-  let successfulMatches = 0;
-
-  competitions.forEach((competition) => {
-    totalMatches += competition.matches.length;
-  });
-
-  console.log(`\n🚀 Bắt đầu xử lý ${totalMatches} trận đấu...`);
-
-  for (const competition of competitions) {
-    console.log(
-      `\n📺 ${competition.name} (${competition.matches.length} trận)`,
-    );
-
-    for (const match of competition.matches) {
-      const homeTeam = match.home_team.short_name || match.home_team.name;
-      const awayTeam = match.away_team.short_name || match.away_team.name;
-      const matchDateTime = formatDateTime(match.match_time);
-
-      for (const room of match.rooms) {
-        try {
-          const matchInfo = await getMatchInfo(room._id);
-
-          if (
-            matchInfo &&
-            matchInfo.room &&
-            matchInfo.room.servers &&
-            matchInfo.room.servers.length > 0
-          ) {
-            let servers = matchInfo.room.servers;
-
-            // Lọc server theo type ưa thích
-            const preferredServers = servers.filter(
-              (s) => s.type === preferredServerType,
-            );
-            if (preferredServers.length > 0) {
-              servers = preferredServers;
-            }
-
-            if (includeAllServers) {
-              // Thêm tất cả servers
-              for (const server of servers) {
-                const channelName = `${homeTeam} vs ${awayTeam} - ${matchDateTime} [${server.name}]`;
-                const groupTitle = competition.short_name || competition.name;
-
-                m3uContent += `#EXTINF:-1 tvg-name="${channelName}" group-title="${groupTitle}",${channelName}\n`;
-                m3uContent += `${server.stream_url}\n\n`;
-              }
-            } else {
-              // Chỉ thêm server đầu tiên
-              const server = servers[0];
-              const channelName = `${homeTeam} vs ${awayTeam} - ${matchDateTime}`;
-              const groupTitle = competition.short_name || competition.name;
-
-              m3uContent += `#EXTINF:-1 tvg-name="${channelName}" group-title="${groupTitle}",${channelName}\n`;
-              m3uContent += `${server.stream_url}\n\n`;
-            }
-
-            successfulMatches++;
-            console.log(
-              `  ✅ ${homeTeam} vs ${awayTeam} (${servers.length} servers)`,
-            );
-          } else {
-            console.log(`  ❌ ${homeTeam} vs ${awayTeam} - Không có server`);
-          }
-
-          processedMatches++;
-          await delay(delayBetweenRequests);
-        } catch (error) {
-          console.error(
-            `  ❌ ${homeTeam} vs ${awayTeam} - Lỗi:`,
-            error.message,
-          );
-          processedMatches++;
-        }
-      }
-    }
-
-    // Hiển thị tiến độ
-    console.log(
-      `📊 Tiến độ: ${processedMatches}/${totalMatches} (${Math.round((processedMatches / totalMatches) * 100)}%)`,
-    );
-  }
-
-  // Tạo tên file
-  const defaultFileName = "current_playlist.m3u";
-
-  const finalFileName = outputFileName || defaultFileName;
-  const outputPath = path.join(__dirname, finalFileName);
-
-  // Lưu file
-  fs.writeFileSync(outputPath, m3uContent, "utf8");
-
-  const channelCount = m3uContent
-    .split("\n")
-    .filter((line) => line.startsWith("#EXTINF")).length;
-
-  console.log(`\n🎉 Hoàn thành!`);
-  console.log(`📁 File: ${outputPath}`);
-  console.log(`📊 Đã xử lý: ${processedMatches}/${totalMatches} trận`);
-  console.log(`✅ Thành công: ${successfulMatches} trận`);
-  console.log(`❌ Thất bại: ${processedMatches - successfulMatches} trận`);
-  console.log(`📺 Tổng số kênh: ${channelCount}`);
-  console.log(`📅 Thời gian: ${getFormattedDate(0)} - ${getFormattedDate(1)}`);
 }
 
 // Chạy script
