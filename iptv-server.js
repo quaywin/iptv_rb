@@ -7,14 +7,14 @@ const PORT = 4444;
 const M3U_FILE_PATH = path.join(__dirname, "current_playlist.m3u");
 
 // Route serve file M3U
-app.get("/playlist.m3u", (req, res) => {
+app.get("/play", (req, res) => {
   try {
     if (fs.existsSync(M3U_FILE_PATH)) {
       // Set headers cho file M3U
       res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
       res.setHeader(
         "Content-Disposition",
-        "attachment; filename=football_playlist.m3u",
+        "attachment; filename=current_playlist.m3u",
       );
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");

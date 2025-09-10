@@ -182,7 +182,7 @@ async function generateIPTVFile() {
             const groupTitle = competition.short_name || competition.name;
 
             // Thêm vào nội dung M3U
-            m3uContent += `#EXTINF:-1 tvg-name="${channelName}" group-title="${groupTitle}",${channelName}\n`;
+            m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
             m3uContent += `${server.stream_url}\n\n`;
 
             console.log(
