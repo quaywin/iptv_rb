@@ -7,13 +7,37 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Hàm chuyển đổi timestamp sang định dạng ngày giờ
 function formatDateTime(timestamp) {
   const date = new Date(timestamp * 1000);
+  const now = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(now.getDate() + 1);
+
+  // So sánh ngày/tháng/năm
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+
+  const isTomorrow =
+    date.getDate() === tomorrow.getDate() &&
+    date.getMonth() === tomorrow.getMonth() &&
+    date.getFullYear() === tomorrow.getFullYear();
+
+  let dayOfWeek;
+  if (isToday) {
+    dayOfWeek = "TODAY";
+  } else if (isTomorrow) {
+    dayOfWeek = "TMR";
+  } else {
+    const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+    dayOfWeek = days[date.getDay()];
+  }
+
   const day = date.getDate().toString().padStart(2, "0");
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
-  const year = date.getFullYear();
   const hours = date.getHours().toString().padStart(2, "0");
   const minutes = date.getMinutes().toString().padStart(2, "0");
 
-  return `${day}/${month}/${year} ${hours}:${minutes}`;
+  return `${dayOfWeek} ${day}/${month} ${hours}:${minutes}`;
 }
 
 // Hàm lấy ngày theo định dạng dd/mm/yyyy
