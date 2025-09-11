@@ -104,11 +104,11 @@ function checkMatches() {
 }
 
 // Tạo cron job
-// cron.schedule("0 */2 * * *", updatePlaylist); // mỗi 2 giờ
-// cron.schedule("*/5 * * * *", checkMatches); // mỗi 5 phút
+cron.schedule("0 */2 * * *", updatePlaylist); // mỗi 2 giờ
+cron.schedule("*/5 * * * *", checkMatches); // mỗi 5 phút
 
 // Chạy ngay khi khởi động
-// updatePlaylist();
+updatePlaylist();
 checkMatches();
 
 console.log("Scheduler đã khởi động!");
