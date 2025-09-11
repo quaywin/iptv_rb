@@ -31,22 +31,27 @@ function checkMatches() {
     const m3uContent = fs.readFileSync(playlistPath, "utf8");
     const lines = m3uContent.split("\n");
     const now = Date.now();
+    const currentYear = new Date().getFullYear();
 
     lines.forEach((line, idx) => {
       if (line.startsWith("#EXTINF")) {
-        const match = line.match(/"([^"]+)"/);
+        // Lấy tên kênh từ tvg-name=""
+        const match = line.match(/tvg-name="([^"]+)"/);
         if (match) {
           const channelName = match[1];
+
+          // Khớp định dạng TODAY dd/mm hh:mm ở cuối chuỗi
           const timeMatch = channelName.match(
-            /(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2})$/,
+            /TODAY (\d{2})\/(\d{2}) (\d{2}):(\d{2})$/,
           );
           if (timeMatch) {
-            const matchTimeStr = timeMatch[1];
-            const [datePart, timePart] = matchTimeStr.split(" ");
-            const [day, month, year] = datePart.split("/");
-            const [hour, minute] = timePart.split(":");
+            const day = timeMatch[1];
+            const month = timeMatch[2];
+            const hour = timeMatch[3];
+            const minute = timeMatch[4];
+            // Tạo timestamp với năm hiện tại
             const matchTimestamp = new Date(
-              `${year}-${month}-${day}T${hour}:${minute}:00`,
+              `${currentYear}-${month}-${day}T${hour}:${minute}:00`,
             ).getTime();
 
             const timeToStart = matchTimestamp - now;
@@ -61,6 +66,7 @@ function checkMatches() {
             if (timeSinceStart > 0 && timeSinceStart < 3 * 60 * 60 * 1000) {
               if (!channelName.startsWith("🔴 |")) {
                 const newChannelName = `🔴 | ${channelName}`;
+                // Thay thế tên kênh trong dòng EXTINF
                 lines[idx] = line.replace(channelName, newChannelName);
                 console.log(
                   `  🟢 Đã cập nhật trạng thái LIVE cho: ${channelName}`,
@@ -79,11 +85,11 @@ function checkMatches() {
 }
 
 // Tạo cron job
-cron.schedule("0 */2 * * *", updatePlaylist); // mỗi 2 giờ
-cron.schedule("*/5 * * * *", checkMatches); // mỗi 5 phút
+// cron.schedule("0 */2 * * *", updatePlaylist); // mỗi 2 giờ
+// cron.schedule("*/5 * * * *", checkMatches); // mỗi 5 phút
 
 // Chạy ngay khi khởi động
-updatePlaylist();
+// updatePlaylist();
 checkMatches();
 
 console.log("Scheduler đã khởi động!");
