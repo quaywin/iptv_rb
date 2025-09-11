@@ -36,12 +36,16 @@ function checkMatches() {
     lines.forEach((line, idx) => {
       if (line.startsWith("#EXTINF")) {
         // Lấy tên kênh từ tvg-name=""
-        const match = line.match(/tvg-name="([^"]+)"/);
-        if (match) {
-          const channelName = match[1];
+        const tvgMatch = line.match(/tvg-name="([^"]+)"/);
+        // Lấy tên kênh sau dấu phẩy
+        const commaMatch = line.match(/,([^,]+)$/);
+
+        if (tvgMatch && commaMatch) {
+          let tvgName = tvgMatch[1];
+          let commaName = commaMatch[1];
 
           // Khớp định dạng TODAY dd/mm hh:mm ở cuối chuỗi
-          const timeMatch = channelName.match(
+          const timeMatch = tvgName.match(
             /TODAY (\d{2})\/(\d{2}) (\d{2}):(\d{2})$/,
           );
           if (timeMatch) {
@@ -59,17 +63,32 @@ function checkMatches() {
 
             if (timeToStart > 0 && timeToStart < 30 * 60 * 1000) {
               console.log(
-                `  ⚽ Sắp bắt đầu: ${channelName} (còn ${Math.round(timeToStart / 60000)} phút)`,
+                `  ⚽ Sắp bắt đầu: ${commaName} (còn ${Math.round(timeToStart / 60000)} phút)`,
               );
             }
 
             if (timeSinceStart > 0 && timeSinceStart < 3 * 60 * 60 * 1000) {
-              if (!channelName.startsWith("🔴 |")) {
-                const newChannelName = `🔴 | ${channelName}`;
-                // Thay thế tên kênh trong dòng EXTINF
-                lines[idx] = line.replace(channelName, newChannelName);
+              // Nếu một trong hai chưa có "🔴 |" thì thêm vào
+              let updated = false;
+              if (!tvgName.startsWith("🔴 |")) {
+                tvgName = `🔴 | ${tvgName}`;
+                updated = true;
+              }
+              if (!commaName.startsWith("🔴 |")) {
+                commaName = `🔴 | ${commaName}`;
+                updated = true;
+              }
+
+              if (updated) {
+                // Thay thế cả hai vị trí
+                let newLine = line.replace(
+                  /tvg-name="([^"]+)"/,
+                  `tvg-name="${tvgName}"`,
+                );
+                newLine = newLine.replace(/,([^,]+)$/, `,${commaName}`);
+                lines[idx] = newLine;
                 console.log(
-                  `  🟢 Đã cập nhật trạng thái LIVE cho: ${channelName}`,
+                  `  🟢 Đã cập nhật trạng thái LIVE cho: ${commaName}`,
                 );
               }
             }
