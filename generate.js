@@ -204,12 +204,13 @@ async function generateIPTVFile() {
           if (server) {
             // Chỉ thêm nếu tìm thấy server id==4
             let channelName = `${homeTeam} vs ${awayTeam} - ${matchDateTime}`;
+
             if (match.status_text === "live") {
               channelName = `🔴 | ${channelName}`;
             }
             const groupTitle = competition.short_name || competition.name;
 
-            m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
+            m3uContent += `#EXTINF:-1 tvg-id="${match._id}" tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
             m3uContent += `${server.stream_url}\n\n`;
 
             console.log(
