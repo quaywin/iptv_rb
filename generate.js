@@ -73,7 +73,7 @@ async function getMatchListForDate(dateString) {
 
 // Hàm gọi API để lấy danh sách trận đấu cho hôm nay và ngày mai
 async function getMatchList() {
-  const daysToFetch = 8; // hôm qua + hôm nay + 6 ngày tiếp theo
+  const daysToFetch = 8;
   const dateStrings = [];
   for (let i = -1; i < daysToFetch - 1; i++) {
     dateStrings.push(getFormattedDate(i));
@@ -187,86 +187,34 @@ async function generateIPTVFile() {
     const awayTeam = match.away_team.short_name || match.away_team.name;
     const matchDateTime = formatDateTime(match.match_time);
 
-    console.log(`  ⚽ ${homeTeam} vs ${awayTeam} - ${matchDateTime}`);
-
-    for (const room of match.rooms) {
-      try {
-        const matchInfo = await getMatchInfo(room._id);
-
-        if (
-          matchInfo &&
-          matchInfo.room &&
-          matchInfo.room.servers &&
-          matchInfo.room.servers.length > 0
-        ) {
-          const server = matchInfo.room.servers.find((s) => s.id == 4);
-
-          if (server) {
-            // Chỉ thêm nếu tìm thấy server id==4
-            let channelName = `${homeTeam} vs ${awayTeam} - ${matchDateTime}`;
-            if (match.status_text === "live") {
-              channelName = `🔴 | ${channelName}`;
-            }
-            const groupTitle = competition.short_name || competition.name;
-
-            m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
-            m3uContent += `${server.stream_url}\n\n`;
-
-            console.log(
-              `    ✓ Đã thêm server: ${server.name} (${server.type})`,
-            );
-            processedMatches++;
-            await delay(500);
-
-            break; // Nếu đã thêm thì dừng vòng lặp room
-          } else {
-            console.log(`    ⚠ Không có server id==4 cho trận này`);
-          }
-        } else {
-          console.log(`    ⚠ Không có server cho trận này`);
-        }
-      } catch (error) {
-        console.error(`    ✗ Lỗi khi xử lý room ${room._id}:`, error.message);
-      }
+    let channelName = `${homeTeam} vs ${awayTeam} - ${matchDateTime}`;
+    if (match.status_text === "live") {
+      channelName = `🔴 | ${channelName}`;
     }
+    const groupTitle = competition.short_name || competition.name;
+
+    // Tạo stream_url theo mẫu
+    const stream_url = `https://cr7.rbncdn.net/live/_${match._id}_football_fhd/playlist.m3u8`;
+
+    m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
+    m3uContent += `${stream_url}\n\n`;
+
+    console.log(`  ✓ Đã thêm: ${channelName}`);
+    processedMatches++;
   }
 
-  // Lưu file
-  const outputPath = path.join(__dirname, `current_playlist.m3u`);
-
-  try {
-    fs.writeFileSync(outputPath, m3uContent, "utf8");
-    console.log(`\n✅ Đã tạo file IPTV thành công: ${outputPath}`);
-    console.log(
-      `📊 Tổng cộng đã xử lý: ${processedMatches}/${allMatches.length} trận đấu`,
-    );
-
-    // Hiển thị thống kê
-    const lines = m3uContent.split("\n");
-    const channelCount = lines.filter((line) =>
-      line.startsWith("#EXTINF"),
-    ).length;
-    console.log(`📺 Số kênh trong file M3U: ${channelCount}`);
-
-    // Hiển thị thống kê theo giải đấu
-    console.log("\n📋 Thống kê theo giải đấu:");
-    competitions.forEach((competition) => {
-      const matchCount = competition.matches.length;
-      console.log(`  - ${competition.name}: ${matchCount} trận`);
-    });
-  } catch (error) {
-    console.error("❌ Lỗi khi lưu file:", error);
-  }
+  return m3uContent;
 }
 
 // Chạy script
-async function main() {
-  console.log("🚀 Bắt đầu tạo file IPTV cho các trận bóng đá (2 ngày)...\n");
-  await generateIPTVFile();
-}
+// async function main() {
+//   console.log("🚀 Bắt đầu tạo file IPTV cho các trận bóng đá (2 ngày)...\n");
+//   await generateIPTVFile();
+// }
 
 // Chạy script và xử lý lỗi
-main().catch((error) => {
-  console.error("❌ Lỗi chung:", error);
-  process.exit(1);
-});
+// main().catch((error) => {
+//   console.error("❌ Lỗi chung:", error);
+//   process.exit(1);
+// });
+module.exports = { generateIPTVFile };
