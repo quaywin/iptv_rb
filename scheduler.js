@@ -22,50 +22,58 @@ function updatePlaylist() {
   });
 }
 
+async function getLiveMatchIds() {
+  try {
+    const response = await fetch("https://api.robong.net/match/live");
+    const data = await response.json();
+    if (!data.status) return [];
+    // Lấy tất cả _id của các trận bóng đá đang live
+    return (data.result.footballMatches || []).map((match) => match._id);
+  } catch (err) {
+    console.error("Lỗi khi lấy danh sách trận live:", err.message);
+    return [];
+  }
+}
+
 // Hàm kiểm tra trận đấu (5 phút/lần)
-function checkMatches() {
+async function checkMatches() {
   console.log(
-    `[${new Date().toLocaleString()}] Đang kiểm tra các trận gần bắt đầu và cập nhật status live...`,
+    `[${new Date().toLocaleString()}] Đang kiểm tra trạng thái LIVE từ API...`,
   );
   try {
+    const liveMatchIds = await getLiveMatchIds();
     const m3uContent = fs.readFileSync(playlistPath, "utf8");
     const lines = m3uContent.split("\n");
-    const now = Date.now();
 
     lines.forEach((line, idx) => {
       if (line.startsWith("#EXTINF")) {
-        const match = line.match(/"([^"]+)"/);
-        if (match) {
-          const channelName = match[1];
-          const timeMatch = channelName.match(
-            /(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2})$/,
-          );
-          if (timeMatch) {
-            const matchTimeStr = timeMatch[1];
-            const [datePart, timePart] = matchTimeStr.split(" ");
-            const [day, month, year] = datePart.split("/");
-            const [hour, minute] = timePart.split(":");
-            const matchTimestamp = new Date(
-              `${year}-${month}-${day}T${hour}:${minute}:00`,
-            ).getTime();
-
-            const timeToStart = matchTimestamp - now;
-            const timeSinceStart = now - matchTimestamp;
-
-            if (timeToStart > 0 && timeToStart < 30 * 60 * 1000) {
-              console.log(
-                `  ⚽ Sắp bắt đầu: ${channelName} (còn ${Math.round(timeToStart / 60000)} phút)`,
-              );
+        // Giả sử bạn đã lưu _id vào tvg-id="..."
+        const idMatch = line.match(/tvg-id="([^"]+)"/);
+        if (idMatch) {
+          const matchId = idMatch[1];
+          if (liveMatchIds.includes(matchId)) {
+            // Đang LIVE, thêm "🔴 |" nếu chưa có
+            const tvgNameMatch = line.match(/tvg-name="([^"]+)"/);
+            const commaMatch = line.match(/,([^,]+)$/);
+            let tvgName = tvgNameMatch ? tvgNameMatch[1] : "";
+            let commaName = commaMatch ? commaMatch[1] : "";
+            let updated = false;
+            if (!tvgName.startsWith("🔴 |")) {
+              tvgName = `🔴 | ${tvgName}`;
+              updated = true;
             }
-
-            if (timeSinceStart > 0 && timeSinceStart < 3 * 60 * 60 * 1000) {
-              if (!channelName.startsWith("🔴 |")) {
-                const newChannelName = `🔴 | ${channelName}`;
-                lines[idx] = line.replace(channelName, newChannelName);
-                console.log(
-                  `  🟢 Đã cập nhật trạng thái LIVE cho: ${channelName}`,
-                );
-              }
+            if (!commaName.startsWith("🔴 |")) {
+              commaName = `🔴 | ${commaName}`;
+              updated = true;
+            }
+            if (updated) {
+              let newLine = line.replace(
+                /tvg-name="([^"]+)"/,
+                `tvg-name="${tvgName}"`,
+              );
+              newLine = newLine.replace(/,([^,]+)$/, `,${commaName}`);
+              lines[idx] = newLine;
+              console.log(`  🟢 Đã cập nhật trạng thái LIVE cho: ${commaName}`);
             }
           }
         }

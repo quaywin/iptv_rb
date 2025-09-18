@@ -5,7 +5,8 @@
   "main": "iptv-server.js",
   "scripts": {
     "start": "node iptv-server.js",
-    "generate": "node generate.js"
+    "generate": "node generate.js",
+    "schedule": "node scheduler.js"
   },
   "dependencies": {
     "express": "^4.18.2",
