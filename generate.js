@@ -73,7 +73,7 @@ async function getMatchListForDate(dateString) {
 
 // Hàm gọi API để lấy danh sách trận đấu cho hôm nay và ngày mai
 async function getMatchList() {
-  const daysToFetch = 8;
+  const daysToFetch = 4;
   const dateStrings = [];
   for (let i = -1; i < daysToFetch - 1; i++) {
     dateStrings.push(getFormattedDate(i));
@@ -126,23 +126,23 @@ async function getMatchList() {
 }
 
 // Hàm gọi API để lấy thông tin chi tiết trận đấu
-async function getMatchInfo(roomId) {
-  try {
-    const response = await fetch(
-      `https://api.robong.net/match/info?room_id=${roomId}`,
-    );
-    const data = await response.json();
+// async function getMatchInfo(roomId) {
+//   try {
+//     const response = await fetch(
+//       `https://api.robong.net/match/info?room_id=${roomId}`,
+//     );
+//     const data = await response.json();
 
-    if (!data.status) {
-      throw new Error(`API Error: ${data.msg}`);
-    }
+//     if (!data.status) {
+//       throw new Error(`API Error: ${data.msg}`);
+//     }
 
-    return data.result;
-  } catch (error) {
-    console.error(`Error fetching match info for room ${roomId}:`, error);
-    return null;
-  }
-}
+//     return data.result;
+//   } catch (error) {
+//     console.error(`Error fetching match info for room ${roomId}:`, error);
+//     return null;
+//   }
+// }
 
 // Hàm tạo nội dung IPTV M3U
 async function generateIPTVFile() {
@@ -192,12 +192,27 @@ async function generateIPTVFile() {
       channelName = `🔴 | ${channelName}`;
     }
     const groupTitle = competition.short_name || competition.name;
-
+    if (!match.rooms || (match.rooms && match.rooms.length == 0)) {
+      console.log(
+        `  ⚠️ Bỏ qua trận ${channelName} vì không có room (commentator)`,
+      );
+      continue;
+    }
+    const room = match.rooms[0];
+    const commentator_id = room.commentator_ids[0] || "";
+    // if (!commentator_id) {
+    //   console.log(`  ⚠️ Bỏ qua trận ${channelName} vì không có commentator_id`);
+    //   continue;
+    // }
     // Tạo stream_url theo mẫu
-    const stream_url = `https://cr7.rbncdn.net/live/_${match._id}_football_fhd/playlist.m3u8`;
+    const stream_url = `https://cr7.rbncdn.net/live/${commentator_id}_${match._id}_football_fhd/playlist.m3u8`;
+    const bk_stream_url = `https://2988376792.global.cdnfastest.com/auto_hls/${match._id}_football_fhd/index.m3u8`;
 
     m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
     m3uContent += `${stream_url}\n\n`;
+
+    m3uContent += `#EXTINF:-1 tvg-name="${channelName} BK" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName} BK\n`;
+    m3uContent += `${bk_stream_url}\n\n`;
 
     console.log(`  ✓ Đã thêm: ${channelName}`);
     processedMatches++;
