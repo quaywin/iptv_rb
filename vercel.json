@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "builds": [{ "src": "api/**/*.js", "use": "@vercel/node" }],
+  "routes": [
+    { "src": "/", "dest": "/api/playlist.js" },
+    { "src": "/playlist.m3u", "dest": "/api/playlist.js" }
+  ]
+}

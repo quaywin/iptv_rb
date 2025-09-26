@@ -18,5 +18,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/yourusername/iptv_rb.git"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
