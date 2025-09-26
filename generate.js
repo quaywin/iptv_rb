@@ -52,11 +52,11 @@ function getFormattedDate(daysOffset = 0) {
   return `${day}/${month}/${year}`;
 }
 
-// Hàm gọi API để lấy danh sách trận đấu cho một ngày
-async function getMatchListForDate(dateString) {
+// Hàm gọi API để lấy danh sách trận đấu cho một ngày và một sport
+async function getMatchListForDate(dateString, sport) {
   try {
     const response = await fetch(
-      `https://api.robong.net/match/list?sport_type=football&date=${dateString}&type=schedule`,
+      `https://api.robong.net/match/list?sport_type=${sport}&date=${dateString}&type=schedule`,
     );
     const data = await response.json();
 
@@ -64,14 +64,19 @@ async function getMatchListForDate(dateString) {
       throw new Error(`API Error: ${data.msg}`);
     }
 
-    return data.result || [];
+    // Gắn thêm field sport vào mỗi competition để biết môn khi xử lý
+    const result = data.result || [];
+    return result.map((comp) => ({ ...comp, sport }));
   } catch (error) {
-    console.error(`Error fetching match list for date ${dateString}:`, error);
+    console.error(
+      `Error fetching match list for date ${dateString} (sport=${sport}):`,
+      error,
+    );
     return [];
   }
 }
 
-// Hàm gọi API để lấy danh sách trận đấu cho hôm nay và ngày mai
+// Hàm gọi API để lấy danh sách trận đấu cho nhiều sport và nhiều ngày
 async function getMatchList() {
   const daysToFetch = 4;
   const dateStrings = [];
@@ -79,39 +84,47 @@ async function getMatchList() {
     dateStrings.push(getFormattedDate(i));
   }
 
-  console.log(`Đang lấy dữ liệu cho các ngày: ${dateStrings.join(", ")}`);
+  const sports = ["football", "volleyball", "tennis"]; // Thêm volleyball và tennis
+  console.log(
+    `Đang lấy dữ liệu cho các ngày: ${dateStrings.join(", ")} và các sport: ${sports.join(", ")}`,
+  );
 
   try {
-    // Gọi API song song cho cả 2 ngày
-    const matchesByDay = await Promise.all(
-      dateStrings.map((date) => getMatchListForDate(date)),
-    );
+    // Tạo tất cả cặp (sport, date) và gọi API song song
+    const promises = [];
+    for (const sport of sports) {
+      for (const date of dateStrings) {
+        promises.push(getMatchListForDate(date, sport));
+      }
+    }
 
-    const allMatches = [].concat(...matchesByDay);
+    const results = await Promise.all(promises);
+    // results là mảng các mảng competition, flatten
+    const allMatches = [].concat(...results);
 
-    // Gộp kết quả từ 2 ngày
+    // Gộp kết quả từ các ngày và các sport
     const allCompetitions = [];
     const competitionMap = new Map();
 
     allMatches.forEach((competition) => {
       if (!competition || !competition._id) return;
-      if (competitionMap.has(competition._id)) {
-        competitionMap
-          .get(competition._id)
-          .matches.push(...competition.matches);
+      // key kết hợp id + sport để tránh trùng id giữa các sport khác nhau
+      const compKey = `${competition._id}|${competition.sport}`;
+      if (competitionMap.has(compKey)) {
+        competitionMap.get(compKey).matches.push(...competition.matches);
       } else {
-        competitionMap.set(competition._id, { ...competition });
+        competitionMap.set(compKey, { ...competition });
       }
     });
 
-    // Chuyển Map thành Array
+    // Chuyển Map thành Array và sort matches trong mỗi competition
     competitionMap.forEach((competition) => {
       competition.matches.sort((a, b) => a.match_time - b.match_time);
       allCompetitions.push(competition);
     });
 
     const totalMatches = allCompetitions.reduce(
-      (sum, comp) => sum + comp.matches.length,
+      (sum, comp) => sum + (comp.matches ? comp.matches.length : 0),
       0,
     );
     console.log(
@@ -124,25 +137,6 @@ async function getMatchList() {
     return [];
   }
 }
-
-// Hàm gọi API để lấy thông tin chi tiết trận đấu
-// async function getMatchInfo(roomId) {
-//   try {
-//     const response = await fetch(
-//       `https://api.robong.net/match/info?room_id=${roomId}`,
-//     );
-//     const data = await response.json();
-
-//     if (!data.status) {
-//       throw new Error(`API Error: ${data.msg}`);
-//     }
-
-//     return data.result;
-//   } catch (error) {
-//     console.error(`Error fetching match info for room ${roomId}:`, error);
-//     return null;
-//   }
-// }
 
 // Hàm tạo nội dung IPTV M3U
 async function generateIPTVFile() {
@@ -162,6 +156,7 @@ async function generateIPTVFile() {
   // Gộp tất cả các trận từ mọi giải vào một mảng duy nhất, loại bỏ trận trùng
   const matchMap = new Map();
   competitions.forEach((competition) => {
+    if (!competition.matches) return;
     competition.matches.forEach((match) => {
       if (!matchMap.has(match._id)) {
         matchMap.set(match._id, {
@@ -183,8 +178,10 @@ async function generateIPTVFile() {
   // Duyệt qua từng trận đã sort
   for (const item of allMatches) {
     const { competition, match } = item;
-    const homeTeam = match.home_team.short_name || match.home_team.name;
-    const awayTeam = match.away_team.short_name || match.away_team.name;
+    const homeTeam =
+      match.home_team && (match.home_team.short_name || match.home_team.name);
+    const awayTeam =
+      match.away_team && (match.away_team.short_name || match.away_team.name);
     const matchDateTime = formatDateTime(match.match_time);
 
     let channelName = `${homeTeam} vs ${awayTeam} - ${matchDateTime}`;
@@ -199,33 +196,26 @@ async function generateIPTVFile() {
       continue;
     }
     const room = match.rooms[0];
-    const commentator_id = room.commentator_ids[0] || "";
+    const commentator_id =
+      (room.commentator_ids && room.commentator_ids[0]) || "";
+    // Lấy sport từ competition (đã gắn khi gọi API)
+    const sport = competition.sport || "football";
+    // Sử dụng sport trong đường dẫn stream
     if (!commentator_id) {
-      const bk_stream_url = `https://2988376792.global.cdnfastest.com/auto_hls/${match._id}_football_fhd/index.m3u8`;
+      const bk_stream_url = `https://2988376792.global.cdnfastest.com/auto_hls/${match._id}_${sport}_fhd/index.m3u8`;
       m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
       m3uContent += `${bk_stream_url}\n\n`;
     } else {
-      const stream_url = `https://cr7.rbncdn.net/live/${commentator_id}_${match._id}_football_fhd/playlist.m3u8`;
+      const stream_url = `https://cr7.rbncdn.net/live/${commentator_id}_${match._id}_${sport}_fhd/playlist.m3u8`;
       m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
       m3uContent += `${stream_url}\n\n`;
     }
 
-    console.log(`  ✓ Đã thêm: ${channelName}`);
+    console.log(`  ✓ Đã thêm: ${channelName} (${sport})`);
     processedMatches++;
   }
 
   return m3uContent;
 }
 
-// Chạy script
-// async function main() {
-//   console.log("🚀 Bắt đầu tạo file IPTV cho các trận bóng đá (2 ngày)...\n");
-//   await generateIPTVFile();
-// }
-
-// Chạy script và xử lý lỗi
-// main().catch((error) => {
-//   console.error("❌ Lỗi chung:", error);
-//   process.exit(1);
-// });
 module.exports = { generateIPTVFile };

@@ -7,7 +7,7 @@ const PORT = 4444;
 const { generateIPTVFile } = require("./generate");
 
 // Route serve file M3U
-app.get("/play", async (req, res) => {
+app.get("/", async (req, res) => {
   try {
     // Gọi hàm lấy nội dung M3U trực tiếp
     const content = await generateIPTVFile();
