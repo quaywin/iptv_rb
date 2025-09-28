@@ -6,21 +6,32 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Hàm chuyển đổi timestamp sang định dạng ngày giờ
 function formatDateTime(timestamp) {
-  const date = new Date(timestamp * 1000);
-  const now = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(now.getDate() + 1);
+  // Date gốc từ timestamp (giây -> ms)
+  const srcDate = new Date(timestamp * 1000);
 
-  // So sánh ngày/tháng/năm
+  // Tạo đối tượng Date thể hiện cùng thời điểm nhưng "theo giờ Việt Nam"
+  // (dùng trick toLocaleString với timeZone để chuyển timezone)
+  const vDate = new Date(
+    srcDate.toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }),
+  );
+
+  // Lấy "now" theo giờ VN để xác định TODAY / TMR
+  const vNow = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }),
+  );
+
+  // Kiểm tra today / tomorrow
   const isToday =
-    date.getDate() === now.getDate() &&
-    date.getMonth() === now.getMonth() &&
-    date.getFullYear() === now.getFullYear();
+    vNow.getFullYear() === vDate.getFullYear() &&
+    vNow.getMonth() === vDate.getMonth() &&
+    vNow.getDate() === vDate.getDate();
 
+  const tmr = new Date(vNow);
+  tmr.setDate(tmr.getDate() + 1);
   const isTomorrow =
-    date.getDate() === tomorrow.getDate() &&
-    date.getMonth() === tomorrow.getMonth() &&
-    date.getFullYear() === tomorrow.getFullYear();
+    tmr.getFullYear() === vDate.getFullYear() &&
+    tmr.getMonth() === vDate.getMonth() &&
+    tmr.getDate() === vDate.getDate();
 
   let dayOfWeek;
   if (isToday) {
@@ -29,13 +40,13 @@ function formatDateTime(timestamp) {
     dayOfWeek = "TMR";
   } else {
     const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-    dayOfWeek = days[date.getDay()];
+    dayOfWeek = days[vDate.getDay()];
   }
 
-  const day = date.getDate().toString().padStart(2, "0");
-  const month = (date.getMonth() + 1).toString().padStart(2, "0");
-  const hours = date.getHours().toString().padStart(2, "0");
-  const minutes = date.getMinutes().toString().padStart(2, "0");
+  const day = vDate.getDate().toString().padStart(2, "0");
+  const month = (vDate.getMonth() + 1).toString().padStart(2, "0");
+  const hours = vDate.getHours().toString().padStart(2, "0");
+  const minutes = vDate.getMinutes().toString().padStart(2, "0");
 
   return `${dayOfWeek} ${day}/${month} ${hours}:${minutes}`;
 }
