@@ -102,7 +102,7 @@ async function getMatchList() {
     dateStrings.push(getFormattedDate(i));
   }
 
-  const sports = ["volleyball", "tennis"]; // Thêm volleyball và tennis
+  const sports = ["volleyball", "tennis", "football"]; // Thêm volleyball và tennis
   console.log(
     `Đang lấy dữ liệu cho các ngày: ${dateStrings.join(", ")} và các sport: ${sports.join(", ")}`,
   );
