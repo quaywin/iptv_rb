@@ -193,6 +193,9 @@ async function generateIPTVFile() {
     `\nBắt đầu xử lý ${allMatches.length} trận đấu đã được sắp xếp theo thời gian.`,
   );
 
+  // Lấy thời gian hiện tại theo Unix timestamp
+  const now = Math.floor(Date.now() / 1000);
+
   // Duyệt qua từng trận đã sort
   for (const item of allMatches) {
     const { competition, match } = item;
@@ -206,6 +209,13 @@ async function generateIPTVFile() {
     if (match.status_text === "live") {
       channelName = `🔴 | ${channelName}`;
     }
+
+    // Bỏ qua trận đã qua và không còn live
+    if (match.match_time < now && match.status_text !== "live") {
+      console.log(`  ⚠️ Bỏ qua trận ${channelName} vì đã qua và không live`);
+      continue;
+    }
+
     const groupTitle = competition.short_name || competition.name;
     if (!match.rooms || (match.rooms && match.rooms.length == 0)) {
       console.log(
