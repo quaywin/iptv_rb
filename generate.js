@@ -67,7 +67,7 @@ function getFormattedDate(daysOffset = 0) {
   const month = (targetDate.getUTCMonth() + 1).toString().padStart(2, "0");
   const year = targetDate.getUTCFullYear();
 
-  return `${day}/${month}/${year}`;
+  return `${day}-${month}-${year}`;
 }
 
 // Hàm gọi API để lấy danh sách trận đấu cho một ngày và một sport
