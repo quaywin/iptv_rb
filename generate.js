@@ -246,7 +246,9 @@ async function generateIPTVFile() {
       m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
       m3uContent += `${bk_stream_url}\n\n`;
     } else {
-      const stream_url = `https://cr7.rbncdn.net/live/${commentator_id}_${match._id}_${sport}_fhd/playlist.m3u8`;
+      // https://rblive.starxcdn.xyz/live/689c7d152eeb894ab75a5340_zp5rzghgz1k5q82_football_fhd.flv
+      // const stream_url = `https://cr7.rbncdn.net/live/${commentator_id}_${match._id}_${sport}_fhd/playlist.m3u8`;
+      const stream_url = `https://rblive.starxcdn.xyz/live/${commentator_id}_${match._id}_${sport}_fhd.flv`;
       m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
       m3uContent += `${stream_url}\n\n`;
     }
