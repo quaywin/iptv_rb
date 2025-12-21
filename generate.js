@@ -75,9 +75,17 @@ async function getMatchListForDate(dateString, sport) {
   try {
     const response = await fetch(
       `https://api.robong.me/v1/match/list?sport_type=${sport}&date=${dateString}&type=schedule`,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Referer: "https://robong.me/",
+          Origin: "https://robong.me",
+        },
+      },
     );
     console.log(
-      `https://api.robong.me/v1/match/list?sport_type=${sport}&date=${dateString}&type=schedule`,
+      `Fetched: ${sport} - ${dateString}`,
     );
     const data = await response.json();
 
@@ -111,15 +119,16 @@ async function getMatchList() {
   );
 
   try {
-    // Tạo tất cả cặp (sport, date) và gọi API song song
-    const promises = [];
+    // Gọi tuần tự có delay để tránh bị chặn IP/Rate limit
+    const results = [];
     for (const sport of sports) {
       for (const date of dateStrings) {
-        promises.push(getMatchListForDate(date, sport));
+        const result = await getMatchListForDate(date, sport);
+        results.push(result);
+        // Delay nhẹ 300ms giữa các request
+        await delay(300);
       }
     }
-
-    const results = await Promise.all(promises);
     // results là mảng các mảng competition, flatten
     const allMatches = [].concat(...results);
 

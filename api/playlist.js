@@ -1,12 +1,17 @@
-const { generateIPTVFile } = require("../generate");
-
+// Vercel Serverless Function acting as a Proxy to your VPS
 module.exports = async (req, res) => {
-  try {
-    const content = await generateIPTVFile();
+  const VPS_URL = "http://217.15.164.89:4444/playlist.m3u";
 
-    if (!content || content.trim() === "") {
-      return res.status(404).send("No playlist available at this time xxxx.");
+  try {
+    const response = await fetch(VPS_URL);
+
+    if (!response.ok) {
+      return res
+        .status(response.status)
+        .send(`Failed to fetch from VPS: ${response.statusText}`);
     }
+
+    const content = await response.text();
 
     res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
     res.setHeader(
@@ -14,12 +19,11 @@ module.exports = async (req, res) => {
       "attachment; filename=current_playlist.m3u",
     );
     res.setHeader("Access-Control-Allow-Origin", "*");
-    // Tùy bạn muốn cache hay không — serverless có giới hạn execution và cold start
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 
     res.status(200).send(content);
   } catch (error) {
-    console.error("Error generating playlist in serverless function:", error);
-    res.status(500).send("Error generating playlist");
+    console.error("Error fetching from VPS:", error);
+    res.status(500).send("Error generating playlist proxy");
   }
 };

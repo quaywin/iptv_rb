@@ -2,9 +2,9 @@
   "name": "iptv_rb",
   "version": "1.0.0",
   "description": "IPTV server and playlist generator",
-  "main": "iptv-server.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node iptv-server.js",
+    "start": "node server.js",
     "generate": "node generate.js",
     "schedule": "node scheduler.js"
   },
