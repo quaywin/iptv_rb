@@ -1,6 +1,6 @@
 // Vercel Serverless Function acting as a Proxy to your VPS
 module.exports = async (req, res) => {
-  const VPS_URL = "http://217.15.164.89:4444/playlist.m3u";
+  const VPS_URL = "http://222.255.214.22:4444/playlist.m3u";
 
   try {
     const response = await fetch(VPS_URL);
