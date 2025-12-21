@@ -5,7 +5,7 @@ module.exports = async (req, res) => {
     const content = await generateIPTVFile();
 
     if (!content || content.trim() === "") {
-      return res.status(404).send("No playlist available at this time.");
+      return res.status(404).send("No playlist available at this time xxxx.");
     }
 
     res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
