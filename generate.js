@@ -74,10 +74,10 @@ function getFormattedDate(daysOffset = 0) {
 async function getMatchListForDate(dateString, sport) {
   try {
     const response = await fetch(
-      `https://api.robong.net/v1/match/list?sport_type=${sport}&date=${dateString}&type=schedule`,
+      `https://api.robong.me/v1/match/list?sport_type=${sport}&date=${dateString}&type=schedule`,
     );
     console.log(
-      `https://api.robong.net/v1/match/list?sport_type=${sport}&date=${dateString}&type=schedule`,
+      `https://api.robong.me/v1/match/list?sport_type=${sport}&date=${dateString}&type=schedule`,
     );
     const data = await response.json();
 
