@@ -3,7 +3,8 @@ module.exports = {
         {
             name: "iptv_server",
             script: "./server.js",
-            instances: 1,
+            instances: "max", // Tận dụng tối đa số nhân CPU để xử lý nhiều kết nối hơn
+            exec_mode: "cluster", // Chạy chế độ Cluster
             autorestart: true,
             watch: false,
             max_memory_restart: "1G",

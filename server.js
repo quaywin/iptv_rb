@@ -96,6 +96,11 @@ app.get("/live", async (req, res) => {
         }
 
         // 5. Pipe stream dữ liệu gốc (TS, FLV...)
+        // Tối ưu Latency: Tắt Nagle's algorithm để gửi gói tin đi ngay lập tức
+        if (res.socket) {
+            res.socket.setNoDelay(true);
+        }
+
         // undici body là Node stream, pipe thẳng được luôn -> Hiệu năng cao
         res.status(statusCode);
         body.pipe(res);
