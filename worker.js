@@ -73,7 +73,7 @@ async function runWorker() {
         
         // Nếu là Live -> Check stream
         if (isLive) {
-          const checkResult = await checkStream(url);
+          const checkResult = await checkStream(line);
           
           let infLine = currentEntry[0];
           let statusIcon = "";
@@ -88,7 +88,7 @@ async function runWorker() {
             
             latencyText = ` | ${checkResult.latency}ms ${statusIcon}`;
 
-            // Quyết định dùng Proxy hay không
+            // Quyết định dùng Proxy hay không cho luồng chính
             if (checkResult.latency > PROXY_THRESHOLD) {
                 useProxy = true;
             }
@@ -99,31 +99,54 @@ async function runWorker() {
             useProxy = true; 
           }
 
+          // 1. XỬ LÝ LUỒNG CHÍNH (MAIN STREAM)
           // Cập nhật thông tin Ping vào Title
           const lastCommaIndex = infLine.lastIndexOf(",");
+          let mainTitlePart = "";
+          let metaPart = "";
+          
           if (lastCommaIndex !== -1) {
-             const meta = infLine.substring(0, lastCommaIndex);
-             const title = infLine.substring(lastCommaIndex + 1);
-             const newTitle = `${title.replace(/ \| \d+ms .| \| OFF ./, "")}${latencyText}`;
-             currentEntry[0] = `${meta},${newTitle}`;
+             metaPart = infLine.substring(0, lastCommaIndex);
+             const rawTitle = infLine.substring(lastCommaIndex + 1);
+             // Xóa thông tin cũ nếu có để tránh duplicate khi update
+             mainTitlePart = rawTitle.replace(/ \| \d+ms .| \| OFF ./, "");
+             
+             // Gán title mới cho entry chính
+             currentEntry[0] = `${metaPart},${mainTitlePart}${latencyText}`;
           }
 
-          // Cập nhật URL (Thêm prefix PROXY:// nếu cần)
+          // Cập nhật URL chính (Thêm prefix PROXY:// nếu cần)
           if (useProxy) {
-              currentEntry.push(`PROXY://${url}`);
+              currentEntry.push(`PROXY://${line}`); // line là url gốc
           } else {
-              currentEntry.push(url);
+              currentEntry.push(line);
           }
 
+          // Đẩy luồng chính vào danh sách
+          newLines.push(...currentEntry);
+          newLines.push(""); 
+
+          // 2. XỬ LÝ LUỒNG PHỤ (BACKUP STREAM - FORCE PROXY)
+          // Chỉ tạo backup nếu link còn sống (alive) VÀ luồng chính chưa dùng proxy
+          // (Nếu luồng chính đã proxy rồi thì không cần hiện thêm 1 dòng proxy nữa)
+          if (checkResult.alive && !useProxy) {
+              const backupTitle = `${mainTitlePart} [Proxy]`;
+              const backupEntry = [
+                  `${metaPart},${backupTitle}`, // Title sạch + [Proxy] (không cần ping)
+                  `PROXY://${line}`             // Luôn luôn dùng Proxy
+              ];
+              newLines.push(...backupEntry);
+              newLines.push("");
+          }
+
+          currentEntry = []; // Reset buffer
         } else {
             // Không phải live, giữ nguyên URL
             currentEntry.push(url);
+            newLines.push(...currentEntry);
+            newLines.push("");
+            currentEntry = [];
         }
-
-        // Đẩy entry đã xử lý vào danh sách mới
-        newLines.push(...currentEntry);
-        newLines.push(""); // Thêm dòng trống ngăn cách
-        currentEntry = [];
       } else if (line.startsWith("#EXTM3U")) {
         newLines.push(line);
         newLines.push("");
