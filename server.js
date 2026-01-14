@@ -4,16 +4,18 @@ const path = require("path");
 const url = require("url");
 const { Readable } = require("stream");
 const { generateIPTVFile } = require("./generate");
-const { setGlobalDispatcher, Agent } = require('undici');
+const { setGlobalDispatcher, Agent, request } = require('undici');
 
 // Cấu hình Global Agent để tối ưu kết nối (Keep-Alive)
+// Tăng số lượng kết nối đồng thời để xử lý nhiều segments video
 const agent = new Agent({
   connect: {
     keepAlive: true,      // Giữ kết nối
-    keepAliveTimeout: 10000,
+    keepAliveTimeout: 15000,
     timeout: 30000
   },
-  pipelining: 0,
+  connections: 500, // Tăng lên 500 kết nối song song (quan trọng cho streaming)
+  pipelining: 1,    // Thử bật pipelining mức thấp
 });
 setGlobalDispatcher(agent);
 
@@ -27,51 +29,54 @@ app.get("/live", async (req, res) => {
 
     try {
         // 1. Chuẩn bị Headers gửi đi
-        // Fake User-Agent để tránh bị chặn
         const headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": "https://robong.me/",
-            "Origin": "https://robong.me"
+            "Origin": "https://robong.me",
+            "Connection": "keep-alive"
         };
 
-        // Forward header 'Range' nếu client yêu cầu (Quan trọng cho seek/buffering)
+        // Forward header 'Range' nếu client yêu cầu
         if (req.headers.range) {
             headers["Range"] = req.headers.range;
         }
 
-        const controller = new AbortController();
-        req.on("close", () => controller.abort());
-
-        // 2. Gọi request tới nguồn
-        const response = await fetch(targetUrl, {
-            headers,
-            signal: controller.signal
+        // 2. Gọi request tới nguồn bằng undici.request (nhanh hơn fetch native)
+        const { statusCode, headers: responseHeaders, body } = await request(targetUrl, {
+            method: 'GET',
+            headers
         });
 
-        if (!response.ok && response.status !== 206) { 
-             throw new Error(`Stream error: ${response.status}`);
+        if (statusCode >= 400) { 
+             // Consume body để giải phóng socket
+             try { await body.dump(); } catch {}
+             throw new Error(`Stream error: ${statusCode}`);
         }
 
         // 3. Forward Headers trả về
         res.setHeader("Access-Control-Allow-Origin", "*");
         
-        // Forward các header quan trọng từ nguồn về client
         const headersToForward = [
             "content-type", "content-length", "content-range", 
             "accept-ranges", "last-modified", "etag"
         ];
         
         headersToForward.forEach(h => {
-            const val = response.headers.get(h);
+            const val = responseHeaders[h];
             if (val) res.setHeader(h, val);
         });
 
-        const contentType = response.headers.get("content-type");
+        const contentType = responseHeaders["content-type"];
 
-        // 4. Xử lý rewrite M3U8 (Chỉ khi không phải Range request một phần)
-        // Nếu là request từng phần (Range), thường không phải là file m3u8 trọn vẹn
-        if (contentType && (contentType.includes("mpegurl") || targetUrl.includes(".m3u8")) && response.status === 200) {
-            const text = await response.text();
+        // 4. Xử lý rewrite M3U8
+        // Kiểm tra contentType hoặc đuôi file
+        const isM3u8 = (contentType && contentType.includes("mpegurl")) || targetUrl.includes(".m3u8");
+        
+        if (isM3u8 && statusCode === 200) {
+            // Với m3u8, cần đọc text để rewrite
+            // undici body là stream, ta gom lại thành string
+            let text = await body.text();
+            
             const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
             
             const newText = text.split("\n").map(line => {
@@ -86,22 +91,27 @@ app.get("/live", async (req, res) => {
                 }
             }).join("\n");
 
-            // Cập nhật lại Content-Length vì nội dung đã thay đổi
             res.removeHeader("content-length");
             return res.send(newText);
         }
 
         // 5. Pipe stream dữ liệu gốc (TS, FLV...)
-        if (response.body) {
-             // Set status code đúng (200 hoặc 206 Partial Content)
-             res.status(response.status);
-             Readable.fromWeb(response.body).pipe(res);
-        } else {
-             res.end();
-        }
+        // undici body là Node stream, pipe thẳng được luôn -> Hiệu năng cao
+        res.status(statusCode);
+        body.pipe(res);
 
-    } catch (error) {
-        if (error.name !== 'AbortError') {
+        // Xử lý lỗi khi pipe đứt gánh
+        body.on('error', (err) => {
+            console.error('Body stream error:', err.message);
+            res.end();
+        });
+
+        res.on('close', () => {
+             // Khi client ngắt kết nối, hủy stream từ nguồn
+             body.destroy();
+        });
+
+    } catch (error) {        if (error.name !== 'AbortError') {
             console.error(`Proxy error [${targetUrl}]:`, error.message);
             if (!res.headersSent) res.status(502).send("Bad Gateway");
         }
@@ -150,4 +160,10 @@ app.get("/playlist.m3u", async (req, res) => {
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`Listening on http://localhost:${port}`));
+const server = app.listen(port, () => console.log(`Listening on http://localhost:${port}`));
+
+// Tối quan trọng: Tắt timeout mặc định của server
+// Mặc định Node.js sẽ ngắt kết nối sau 2 phút nếu không có hoạt động,
+// hoặc giới hạn thời gian request. Với Livestream (kéo dài hàng giờ), cần set về 0 (vô hạn).
+server.timeout = 0;
+server.keepAliveTimeout = 60000 * 60; // 1 tiếng
