@@ -1,54 +1,15 @@
 const fs = require("fs");
 const path = require("path");
 
-// Hàm delay để tránh spam API
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Hàm chuyển đổi timestamp sang định dạng ngày giờ
-function formatDateTime(timestamp) {
-  // Date gốc từ timestamp (giây -> ms)
+// Hàm lấy giờ:phút từ timestamp (theo giờ Việt Nam)
+function formatTime(timestamp) {
   const srcDate = new Date(timestamp * 1000);
-
-  // Tạo đối tượng Date thể hiện cùng thời điểm nhưng "theo giờ Việt Nam"
-  // (dùng trick toLocaleString với timeZone để chuyển timezone)
   const vDate = new Date(
     srcDate.toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }),
   );
-
-  // Lấy "now" theo giờ VN để xác định TODAY / TMR
-  const vNow = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }),
-  );
-
-  // Kiểm tra today / tomorrow
-  const isToday =
-    vNow.getFullYear() === vDate.getFullYear() &&
-    vNow.getMonth() === vDate.getMonth() &&
-    vNow.getDate() === vDate.getDate();
-
-  const tmr = new Date(vNow);
-  tmr.setDate(tmr.getDate() + 1);
-  const isTomorrow =
-    tmr.getFullYear() === vDate.getFullYear() &&
-    tmr.getMonth() === vDate.getMonth() &&
-    tmr.getDate() === vDate.getDate();
-
-  let dayOfWeek;
-  if (isToday) {
-    dayOfWeek = "TODAY";
-  } else if (isTomorrow) {
-    dayOfWeek = "TMR";
-  } else {
-    const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-    dayOfWeek = days[vDate.getDay()];
-  }
-
-  const day = vDate.getDate().toString().padStart(2, "0");
-  const month = (vDate.getMonth() + 1).toString().padStart(2, "0");
   const hours = vDate.getHours().toString().padStart(2, "0");
   const minutes = vDate.getMinutes().toString().padStart(2, "0");
-
-  return `${dayOfWeek} ${day}/${month} ${hours}:${minutes}`;
+  return `${hours}:${minutes}`;
 }
 
 // Hàm lấy ngày theo định dạng dd/mm/yyyy (theo giờ Việt Nam)
@@ -107,28 +68,57 @@ async function getMatchListForDate(dateString, sport) {
 
 // Hàm gọi API để lấy danh sách trận đấu cho nhiều sport và nhiều ngày
 async function getMatchList() {
-  const daysToFetch = 4;
+  const hoursBack = 6;    // Lấy dữ liệu từ 6h trước
+  const hoursAhead = 12;  // Đến 12h sau
+
+  // Lấy thời gian hiện tại và chuyển sang giờ VN để tính toán ngày
+  const nowUtc = new Date();
+  const vnTimeOffset = 7 * 60; // UTC+7
+  const vnNow = new Date(nowUtc.getTime() + vnTimeOffset * 60 * 1000);
+
+  // Tính mốc thời gian bắt đầu và kết thúc (theo giờ VN giả lập)
+  const startLimit = new Date(vnNow.getTime() - hoursBack * 60 * 60 * 1000);
+  const endLimit = new Date(vnNow.getTime() + hoursAhead * 60 * 60 * 1000);
+
+  // Xác định mốc 0h00 hôm nay (theo giờ VN)
+  const vnMidnight = new Date(vnNow);
+  vnMidnight.setUTCHours(0, 0, 0, 0);
+
+  // Xác định mốc 0h00 ngày mai
+  const vnMidnightNext = new Date(vnMidnight.getTime() + 24 * 60 * 60 * 1000);
+
+  let startOffset = 0;
+  let endOffset = 0;
+
+  // Nếu startLimit nhỏ hơn 0h00 hôm nay -> cần lấy ngày hôm qua
+  if (startLimit.getTime() < vnMidnight.getTime()) {
+    startOffset = -1;
+  }
+
+  // Nếu endLimit lớn hơn hoặc bằng 0h00 ngày mai -> cần lấy ngày mai
+  if (endLimit.getTime() >= vnMidnightNext.getTime()) {
+    endOffset = 1;
+  }
+
   const dateStrings = [];
-  for (let i = -1; i < daysToFetch - 1; i++) {
+  for (let i = startOffset; i <= endOffset; i++) {
     dateStrings.push(getFormattedDate(i));
   }
 
-  const sports = ["volleyball", "tennis", "football"]; // Thêm volleyball và tennis
+  const sports = ["volleyball", "tennis", "football"];
   console.log(
-    `Đang lấy dữ liệu cho các ngày: ${dateStrings.join(", ")} và các sport: ${sports.join(", ")}`,
+    `Đang lấy dữ liệu từ -${hoursBack}h đến +${hoursAhead}h. Các ngày cần fetch: ${dateStrings.join(", ")}`,
   );
 
   try {
-    // Gọi tuần tự có delay để tránh bị chặn IP/Rate limit
-    const results = [];
+    // Gọi song song tất cả request cùng lúc để tối ưu tốc độ
+    const promises = [];
     for (const sport of sports) {
       for (const date of dateStrings) {
-        const result = await getMatchListForDate(date, sport);
-        results.push(result);
-        // Delay nhẹ 300ms giữa các request
-        await delay(300);
+        promises.push(getMatchListForDate(date, sport));
       }
     }
+    const results = await Promise.all(promises);
     // results là mảng các mảng competition, flatten
     const allMatches = [].concat(...results);
 
@@ -181,8 +171,6 @@ async function generateIPTVFile() {
   // Header của file M3U
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
 
-  let processedMatches = 0;
-
   // Gộp tất cả các trận từ mọi giải vào một mảng duy nhất, loại bỏ trận trùng
   const matchMap = new Map();
   competitions.forEach((competition) => {
@@ -207,39 +195,59 @@ async function generateIPTVFile() {
 
   // Lấy thời gian hiện tại theo Unix timestamp
   const now = Math.floor(Date.now() / 1000);
+  const hoursLookingAhead = 12;
+
+  // Đưa sportIcons ra ngoài vòng lặp để tránh tạo lại object
+  const sportIcons = {
+    football: "⚽",
+    volleyball: "🏐",
+    tennis: "🎾",
+  };
 
   // Duyệt qua từng trận đã sort
   for (const item of allMatches) {
     const { competition, match } = item;
+    // Lấy sport từ competition (đã gắn khi gọi API)
+    const sport = competition.sport || "football";
+
+    // Logic lọc trận đấu (kiểm tra sớm để tránh xử lý không cần thiết):
+    // 1. Quá khứ (< now): Chỉ giữ nếu đang LIVE
+    // 2. Tương lai (>= now): Giữ nếu trong khoảng 12h tới
+
+    // Nếu là quá khứ (match_time < now)
+    if (match.match_time < now) {
+      if (match.status_text !== "live") {
+        continue; // Bỏ qua trận đã qua và không live
+      }
+      // Nếu live thì giữ lại, không cần check gì thêm
+    } else {
+      // Nếu là tương lai - Bỏ qua trận xa hơn 12 giờ tới
+      if (match.match_time > now + hoursLookingAhead * 3600) {
+        continue;
+      }
+    }
+
+    // Kiểm tra có room không (filter sớm)
+    if (!match.rooms || match.rooms.length === 0) {
+      continue;
+    }
+
     const homeTeam =
       match.home_team && (match.home_team.short_name || match.home_team.name);
     const awayTeam =
       match.away_team && (match.away_team.short_name || match.away_team.name);
-    const matchDateTime = formatDateTime(match.match_time);
+    const matchTime = formatTime(match.match_time);
+    const sportIcon = sportIcons[sport] || "";
 
-    let channelName = `${homeTeam} vs ${awayTeam} - ${matchDateTime}`;
+    let channelName = `${homeTeam} vs ${awayTeam} | ${matchTime} ${sportIcon}`;
     if (match.status_text === "live") {
-      channelName = `🔴 | ${channelName}`;
-    }
-
-    // Bỏ qua trận đã qua và không còn live
-    if (match.match_time < now && match.status_text !== "live") {
-      console.log(`  ⚠️ Bỏ qua trận ${channelName} vì đã qua và không live`);
-      continue;
+      channelName = `🔴 ${channelName}`;
     }
 
     const groupTitle = competition.short_name || competition.name;
-    if (!match.rooms || (match.rooms && match.rooms.length == 0)) {
-      console.log(
-        `  ⚠️ Bỏ qua trận ${channelName} vì không có room (commentator)`,
-      );
-      continue;
-    }
     const room = match.rooms[0];
     const commentator_id =
       (room.commentator_ids && room.commentator_ids[0]) || "";
-    // Lấy sport từ competition (đã gắn khi gọi API)
-    const sport = competition.sport || "football";
     // Sử dụng sport trong đường dẫn stream
     if (!commentator_id) {
       const bk_stream_url = `https://2988376792.global.cdnfastest.com/auto_hls/${match._id}_${sport}_fhd/index.m3u8`;
@@ -252,9 +260,6 @@ async function generateIPTVFile() {
       m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
       m3uContent += `${stream_url}\n\n`;
     }
-
-    console.log(`  ✓ Đã thêm: ${channelName} (${sport})`);
-    processedMatches++;
   }
 
   return m3uContent;
