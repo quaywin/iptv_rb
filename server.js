@@ -55,6 +55,16 @@ app.get("/live", async (req, res) => {
 
         // 3. Forward Headers trả về
         res.setHeader("Access-Control-Allow-Origin", "*");
+
+        // --- CẤU HÌNH CLOUDFLARE & CACHE (QUAN TRỌNG) ---
+        // Ra lệnh cho Cloudflare KHÔNG cache nội dung stream này
+        res.setHeader("Cloudflare-CDN-Cache-Control", "no-store");
+        res.setHeader("CDN-Cache-Control", "no-store");
+        // Ra lệnh cho trình duyệt/player không cache
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+        // ------------------------------------------------
         
         const headersToForward = [
             "content-type", "content-length", "content-range", 
@@ -123,7 +133,7 @@ app.get("/live", async (req, res) => {
     }
 });
 
-app.get("/playlist.m3u", async (req, res) => {
+app.get("/", async (req, res) => {
     try {
         let content = "";
         // Kiểm tra file playlist.m3u có tồn tại không
@@ -156,6 +166,11 @@ app.get("/playlist.m3u", async (req, res) => {
 
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
         res.setHeader("Content-Disposition", 'attachment; filename="playlist.m3u"');
+        
+        // Cache playlist trong 30s để giảm tải cho VPS (hợp lệ với Cloudflare)
+        res.setHeader("Cache-Control", "public, max-age=30");
+        res.setHeader("Cloudflare-CDN-Cache-Control", "max-age=30");
+
         res.send(proxiedContent);
 
     } catch (error) {
@@ -164,7 +179,7 @@ app.get("/playlist.m3u", async (req, res) => {
     }
 });
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3030;
 const server = app.listen(port, () => console.log(`Listening on http://localhost:${port}`));
 
 // Tối quan trọng: Tắt timeout mặc định của server
