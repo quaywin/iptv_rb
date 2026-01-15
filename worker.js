@@ -71,72 +71,27 @@ async function runWorker() {
         // Đây là dòng URL (có thể đã có prefix từ lần run trước nếu đọc file cũ, nhưng đây là generate mới nên ok)
         let url = line;
         
-        // Nếu là Live -> Check stream
+        // Nếu là Live -> Không cần check ping, tạo luôn 2 luồng (Direct + Proxy)
         if (isLive) {
-          const checkResult = await checkStream(line);
-          
+          // 1. LUỒNG CHÍNH (DIRECT)
+          // Giữ nguyên title gốc từ generate.js (không có thông tin ping)
+          newLines.push(...currentEntry);
+          newLines.push(line); 
+          newLines.push("");
+
+          // 2. LUỒNG PHỤ (BACKUP - FORCE PROXY)
+          // Tạo title mới có suffix [Backup]
           let infLine = currentEntry[0];
-          let statusIcon = "";
-          let latencyText = "";
-          let useProxy = false;
-
-          if (checkResult.alive) {
-            // Ping màu xanh/vàng/đỏ tùy tốc độ
-            if (checkResult.latency < 500) statusIcon = "🟢";
-            else if (checkResult.latency < 1500) statusIcon = "🟡";
-            else statusIcon = "🟠";
-            
-            latencyText = ` | ${checkResult.latency}ms ${statusIcon}`;
-
-            // Quyết định dùng Proxy hay không cho luồng chính
-            if (checkResult.latency > PROXY_THRESHOLD) {
-                useProxy = true;
-            }
-          } else {
-            statusIcon = "❌"; // Chết
-            latencyText = ` | OFF ${statusIcon}`;
-            // Nếu chết cũng thử qua proxy xem sao (hoặc giữ nguyên)
-            useProxy = true; 
-          }
-
-          // 1. XỬ LÝ LUỒNG CHÍNH (MAIN STREAM)
-          // Cập nhật thông tin Ping vào Title
           const lastCommaIndex = infLine.lastIndexOf(",");
-          let mainTitlePart = "";
-          let metaPart = "";
           
           if (lastCommaIndex !== -1) {
-             metaPart = infLine.substring(0, lastCommaIndex);
+             const metaPart = infLine.substring(0, lastCommaIndex);
              const rawTitle = infLine.substring(lastCommaIndex + 1);
-             // Xóa thông tin cũ nếu có để tránh duplicate khi update
-             mainTitlePart = rawTitle.replace(/ \| \d+ms .| \| OFF ./, "");
+             const backupTitle = `${rawTitle} [Backup]`;
              
-             // Gán title mới cho entry chính
-             currentEntry[0] = `${metaPart},${mainTitlePart}${latencyText}`;
-          }
-
-          // Cập nhật URL chính (Thêm prefix PROXY:// nếu cần)
-          if (useProxy) {
-              currentEntry.push(`PROXY://${line}`); // line là url gốc
-          } else {
-              currentEntry.push(line);
-          }
-
-          // Đẩy luồng chính vào danh sách
-          newLines.push(...currentEntry);
-          newLines.push(""); 
-
-          // 2. XỬ LÝ LUỒNG PHỤ (BACKUP STREAM - FORCE PROXY)
-          // Chỉ tạo backup nếu link còn sống (alive) VÀ luồng chính chưa dùng proxy
-          // (Nếu luồng chính đã proxy rồi thì không cần hiện thêm 1 dòng proxy nữa)
-          if (checkResult.alive && !useProxy) {
-              const backupTitle = `${mainTitlePart} [Proxy]`;
-              const backupEntry = [
-                  `${metaPart},${backupTitle}`, // Title sạch + [Proxy] (không cần ping)
-                  `PROXY://${line}`             // Luôn luôn dùng Proxy
-              ];
-              newLines.push(...backupEntry);
-              newLines.push("");
+             newLines.push(`${metaPart},${backupTitle}`);
+             newLines.push(`PROXY://${line}`);
+             newLines.push("");
           }
 
           currentEntry = []; // Reset buffer
