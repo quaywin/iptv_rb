@@ -89,13 +89,7 @@ async function runWorker() {
             latencyText = ` | ${checkResult.latency}ms ${statusIcon}`;
 
             // Quyết định dùng Proxy hay không cho luồng chính
-            // Logic mới: Check domain
-            if (line.includes("rblive.starxcdn.xyz")) {
-                useProxy = true;
-            } else if (line.includes("cdnfastest")) {
-                useProxy = false;
-            } else if (checkResult.latency > PROXY_THRESHOLD) {
-                // Fallback: Nếu không thuộc rule trên thì check ping
+            if (checkResult.latency > PROXY_THRESHOLD) {
                 useProxy = true;
             }
           } else {
