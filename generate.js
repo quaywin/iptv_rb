@@ -69,7 +69,7 @@ async function getMatchListForDate(dateString, sport) {
 // Hàm gọi API để lấy danh sách trận đấu cho nhiều sport và nhiều ngày
 async function getMatchList() {
   const hoursBack = 6;    // Lấy dữ liệu từ 6h trước
-  const hoursAhead = 12;  // Đến 12h sau
+  const hoursAhead = 24;  // Đến 24h sau
 
   // Lấy thời gian hiện tại và chuyển sang giờ VN để tính toán ngày
   const nowUtc = new Date();
@@ -195,7 +195,7 @@ async function generateIPTVFile() {
 
   // Lấy thời gian hiện tại theo Unix timestamp
   const now = Math.floor(Date.now() / 1000);
-  const hoursLookingAhead = 12;
+  const hoursLookingAhead = 24;
 
   // Đưa sportIcons ra ngoài vòng lặp để tránh tạo lại object
   const sportIcons = {
