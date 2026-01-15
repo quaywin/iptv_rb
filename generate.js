@@ -258,7 +258,7 @@ async function generateIPTVFile() {
       // const stream_url = `https://cr7.rbncdn.net/live/${commentator_id}_${match._id}_${sport}_fhd/playlist.m3u8`;
       const stream_url = `https://rblive.starxcdn.xyz/live/${commentator_id}_${match._id}_${sport}_fhd.flv`;
       m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
-      m3uContent += `PROXY://${stream_url}\n\n`;
+      m3uContent += `${stream_url}\n\n`;
     }
   }
 
