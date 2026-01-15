@@ -149,18 +149,17 @@ app.get("/", async (req, res) => {
             return res.status(404).send("No playlist available.");
         }
 
-        // Rewrite URL trong playlist thành Proxy URL NẾU có prefix PROXY://
+        // Rewrite URL trong playlist thành Proxy URL NẾU là link rblive.starxcdn.xyz
         const host = req.get("host");
         const protocol = req.protocol;
         
         const proxiedContent = content.split("\n").map(line => {
             const trimmed = line.trim();
-            if (trimmed.startsWith("PROXY://")) {
-                // Xóa prefix và chuyển thành link proxy
-                const originalUrl = trimmed.replace("PROXY://", "");
-                return `${protocol}://${host}/live?url=${encodeURIComponent(originalUrl)}`;
+            // Nếu là link http(s) và chứa domain cần proxy
+            if (trimmed.startsWith("http") && trimmed.includes("rblive.starxcdn.xyz")) {
+                return `${protocol}://${host}/live?url=${encodeURIComponent(trimmed)}`;
             }
-            // Nếu không có prefix, giữ nguyên (Direct Link)
+            // Các link khác (như cdnfastest) hoặc #EXT... giữ nguyên
             return line;
         }).join("\n");
 
