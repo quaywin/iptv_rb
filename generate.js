@@ -240,7 +240,10 @@ async function generateIPTVFile() {
     const sportIcon = sportIcons[sport] || "";
 
     let channelName = `${homeTeam} vs ${awayTeam} | ${matchTime} ${sportIcon}`;
-    if (match.status_text === "live") {
+    // Mark as live if status is live OR starting within 30 minutes
+    const isStartingSoon = match.match_time > now && match.match_time <= now + 30 * 60;
+
+    if (match.status_text === "live" || isStartingSoon) {
       channelName = `🔴 ${channelName}`;
     }
 
