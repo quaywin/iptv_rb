@@ -13,6 +13,9 @@ function formatTime(timestamp) {
   return `${hours}:${minutes}`;
 }
 
+// Hàm delay
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Hàm lấy ngày theo định dạng dd/mm/yyyy (theo giờ Việt Nam)
 function getFormattedDate(daysOffset = 0) {
   // Lấy thời gian hiện tại và chuyển sang giờ VN
@@ -111,14 +114,16 @@ async function getMatchList() {
   );
 
   try {
-    // Gọi song song tất cả request cùng lúc để tối ưu tốc độ
-    const promises = [];
+    // Gọi tuần tự các request để tránh làm server quá tải (staggered requests)
+    const results = [];
     for (const sport of sports) {
       for (const date of dateStrings) {
-        promises.push(getMatchListForDate(date, sport));
+        const result = await getMatchListForDate(date, sport);
+        results.push(result);
+        // Delay nhỏ giữa các request
+        await delay(200);
       }
     }
-    const results = await Promise.all(promises);
     // results là mảng các mảng competition, flatten
     const allMatches = [].concat(...results);
 

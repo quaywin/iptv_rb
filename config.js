@@ -8,9 +8,9 @@ function getInt(value, defaultValue) {
 const config = {
   port: process.env.PORT || 3030,
   vpsUrl: process.env.VPS_URL || "",
-  apiBaseUrl: process.env.API_BASE_URL || "https://api.robong.me/v1",
-  referer: process.env.REFERER || "https://robong.me/",
-  origin: process.env.ORIGIN || "https://robong.me",
+  apiBaseUrl: process.env.API_BASE_URL || "https://rbapi.online/v1",
+  referer: process.env.REFERER || "https://robong.cc/",
+  origin: process.env.ORIGIN || "https://robong.cc",
   userAgent: process.env.USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   backupStreamBase: process.env.BACKUP_STREAM_BASE || "https://2988376792.global.cdnfastest.com",
   primaryStreamBase: process.env.PRIMARY_STREAM_BASE || "https://rblive.starxcdn.xyz",
