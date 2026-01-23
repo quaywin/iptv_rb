@@ -1,6 +1,7 @@
 current_playlist.m3u
-playlist.m3u
+data/
 test.m3u
-*.json
 node_modules/
-package-lock.json
+.env
+.DS_Store
+.claude/

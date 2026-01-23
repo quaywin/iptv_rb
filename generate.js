@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const config = require("./config");
 
 // Hàm lấy giờ:phút từ timestamp (theo giờ Việt Nam)
 function formatTime(timestamp) {
@@ -35,13 +36,12 @@ function getFormattedDate(daysOffset = 0) {
 async function getMatchListForDate(dateString, sport) {
   try {
     const response = await fetch(
-      `https://api.robong.me/v1/match/list?sport_type=${sport}&date=${dateString}&type=schedule`,
+      `${config.apiBaseUrl}/match/list?sport_type=${sport}&date=${dateString}&type=schedule`,
       {
         headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Referer: "https://robong.me/",
-          Origin: "https://robong.me",
+          "User-Agent": config.userAgent,
+          Referer: config.referer,
+          Origin: config.origin,
         },
       },
     );
@@ -68,8 +68,8 @@ async function getMatchListForDate(dateString, sport) {
 
 // Hàm gọi API để lấy danh sách trận đấu cho nhiều sport và nhiều ngày
 async function getMatchList() {
-  const hoursBack = 6;    // Lấy dữ liệu từ 6h trước
-  const hoursAhead = 24;  // Đến 24h sau
+  const hoursBack = config.hoursBack;    // Lấy dữ liệu từ config
+  const hoursAhead = config.hoursAhead;  // Đến 24h sau
 
   // Lấy thời gian hiện tại và chuyển sang giờ VN để tính toán ngày
   const nowUtc = new Date();
@@ -195,7 +195,7 @@ async function generateIPTVFile() {
 
   // Lấy thời gian hiện tại theo Unix timestamp
   const now = Math.floor(Date.now() / 1000);
-  const hoursLookingAhead = 24;
+  const hoursLookingAhead = config.hoursLookingAhead;
 
   // Đưa sportIcons ra ngoài vòng lặp để tránh tạo lại object
   const sportIcons = {
@@ -253,13 +253,13 @@ async function generateIPTVFile() {
       (room.commentator_ids && room.commentator_ids[0]) || "";
     // Sử dụng sport trong đường dẫn stream
     if (!commentator_id) {
-      const bk_stream_url = `https://2988376792.global.cdnfastest.com/auto_hls/${match._id}_${sport}_fhd/index.m3u8`;
+      const bk_stream_url = `${config.backupStreamBase}/auto_hls/${match._id}_${sport}_fhd/index.m3u8`;
       m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
       m3uContent += `${bk_stream_url}\n\n`;
     } else {
       // https://rblive.starxcdn.xyz/live/689c7d152eeb894ab75a5340_zp5rzghgz1k5q82_football_fhd.flv
       // const stream_url = `https://cr7.rbncdn.net/live/${commentator_id}_${match._id}_${sport}_fhd/playlist.m3u8`;
-      const stream_url = `https://rblive.starxcdn.xyz/live/${commentator_id}_${match._id}_${sport}_fhd.flv`;
+      const stream_url = `${config.primaryStreamBase}/live/${commentator_id}_${match._id}_${sport}_fhd.flv`;
       m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${competition.logo}" group-title="${groupTitle}",${channelName}\n`;
       m3uContent += `${stream_url}\n\n`;
     }

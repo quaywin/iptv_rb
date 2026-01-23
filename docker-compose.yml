@@ -1,0 +1,16 @@
+services:
+  iptv-rb:
+    build: .
+    container_name: iptv-rb
+    restart: always
+    ports:
+      - "3030:3030"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/usr/src/app/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

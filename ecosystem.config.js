@@ -10,7 +10,7 @@ module.exports = {
             max_memory_restart: "1G",
             env: {
                 NODE_ENV: "production",
-                PORT: 4444,
+                // PORT will be read from .env if present, otherwise defaults in config.js
             },
         },
         {

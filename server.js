@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const url = require("url");
 const { Readable } = require("stream");
+const config = require("./config");
 const { generateIPTVFile } = require("./generate");
 const { setGlobalDispatcher, Agent, request } = require('undici');
 
@@ -20,7 +21,11 @@ const agent = new Agent({
 setGlobalDispatcher(agent);
 
 const app = express();
-const PLAYLIST_FILE = path.join(__dirname, "playlist.m3u");
+const DATA_DIR = path.join(__dirname, "data");
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR);
+}
+const PLAYLIST_FILE = path.join(DATA_DIR, "playlist.m3u");
 
 // Proxy endpoint
 app.get("/live", async (req, res) => {
@@ -30,9 +35,9 @@ app.get("/live", async (req, res) => {
     try {
         // 1. Chuẩn bị Headers gửi đi
         const headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://robong.me/",
-            "Origin": "https://robong.me",
+            "User-Agent": config.userAgent,
+            "Referer": config.referer,
+            "Origin": config.origin,
             "Connection": "keep-alive"
         };
 
@@ -179,7 +184,7 @@ app.get("/", async (req, res) => {
     }
 });
 
-const port = process.env.PORT || 3030;
+const port = config.port;
 const server = app.listen(port, () => console.log(`Listening on http://localhost:${port}`));
 
 // Tối quan trọng: Tắt timeout mặc định của server

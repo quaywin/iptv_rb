@@ -1,12 +1,17 @@
 const fs = require("fs");
 const path = require("path");
+const config = require("./config");
 const { generateIPTVFile } = require("./generate");
 
 // Cấu hình
-const PLAYLIST_FILE = path.join(__dirname, "playlist.m3u");
-const CHECK_INTERVAL = 5 * 60 * 1000; // 5 phút
-const TIMEOUT = 2000; // Timeout cho mỗi request (2s)
-const PROXY_THRESHOLD = 500; // Nếu ping > 500ms thì dùng Proxy
+const DATA_DIR = path.join(__dirname, "data");
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR);
+}
+const PLAYLIST_FILE = path.join(DATA_DIR, "playlist.m3u");
+const CHECK_INTERVAL = config.checkInterval; // Từ config
+const TIMEOUT = config.timeout; // Từ config
+const PROXY_THRESHOLD = config.proxyThreshold; // Từ config
 
 // Hàm delay
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
