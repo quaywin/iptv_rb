@@ -7,188 +7,141 @@ const config = require("./config");
 const { generateIPTVFile } = require("./generate");
 const { setGlobalDispatcher, Agent, request } = require('undici');
 
-// Cấu hình Global Agent để tối ưu kết nối (Keep-Alive)
-// Tăng số lượng kết nối đồng thời để xử lý nhiều segments video
+// Optimized Global Agent (Keep-Alive)
 const agent = new Agent({
   connect: {
-    keepAlive: true,      // Giữ kết nối
+    keepAlive: true,
     keepAliveTimeout: 15000,
     timeout: 30000
   },
-  connections: 500, // Tăng lên 500 kết nối song song (quan trọng cho streaming)
-  pipelining: 1,    // Thử bật pipelining mức thấp
+  connections: 500, // Important for streaming
+  pipelining: 1,
 });
 setGlobalDispatcher(agent);
 
 const app = express();
 const DATA_DIR = path.join(__dirname, "data");
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR);
-}
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 const PLAYLIST_FILE = path.join(DATA_DIR, "playlist.m3u");
 
 // Proxy endpoint
 app.get("/live", async (req, res) => {
-    const targetUrl = req.query.url;
-    if (!targetUrl) return res.status(400).send("Missing URL");
+  const targetUrl = req.query.url;
+  if (!targetUrl) return res.status(400).send("Missing URL");
 
-    try {
-        // 1. Chuẩn bị Headers gửi đi
-        const headers = {
-            "User-Agent": config.userAgent,
-            "Referer": config.referer,
-            "Origin": config.origin,
-            "Connection": "keep-alive"
-        };
+  try {
+    const headers = {
+      "User-Agent": config.userAgent,
+      "Referer": config.referer,
+      "Origin": config.origin,
+      "Connection": "keep-alive"
+    };
 
-        // Forward header 'Range' nếu client yêu cầu
-        if (req.headers.range) {
-            headers["Range"] = req.headers.range;
-        }
+    if (req.headers.range) headers["Range"] = req.headers.range;
 
-        // 2. Gọi request tới nguồn bằng undici.request (nhanh hơn fetch native)
-        const { statusCode, headers: responseHeaders, body } = await request(targetUrl, {
-            method: 'GET',
-            headers
-        });
+    const { statusCode, headers: respHeaders, body } = await request(targetUrl, {
+      method: 'GET',
+      headers
+    });
 
-        if (statusCode >= 400) { 
-             // Consume body để giải phóng socket
-             try { await body.dump(); } catch {}
-             throw new Error(`Stream error: ${statusCode}`);
-        }
-
-        // 3. Forward Headers trả về
-        res.setHeader("Access-Control-Allow-Origin", "*");
-
-        // --- CẤU HÌNH CLOUDFLARE & CACHE (QUAN TRỌNG) ---
-        // Ra lệnh cho Cloudflare KHÔNG cache nội dung stream này
-        res.setHeader("Cloudflare-CDN-Cache-Control", "no-store");
-        res.setHeader("CDN-Cache-Control", "no-store");
-        // Ra lệnh cho trình duyệt/player không cache
-        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        res.setHeader("Pragma", "no-cache");
-        res.setHeader("Expires", "0");
-        // ------------------------------------------------
-        
-        const headersToForward = [
-            "content-type", "content-length", "content-range", 
-            "accept-ranges", "last-modified", "etag"
-        ];
-        
-        headersToForward.forEach(h => {
-            const val = responseHeaders[h];
-            if (val) res.setHeader(h, val);
-        });
-
-        const contentType = responseHeaders["content-type"];
-
-        // 4. Xử lý rewrite M3U8
-        // Kiểm tra contentType hoặc đuôi file
-        const isM3u8 = (contentType && contentType.includes("mpegurl")) || targetUrl.includes(".m3u8");
-        
-        if (isM3u8 && statusCode === 200) {
-            // Với m3u8, cần đọc text để rewrite
-            // undici body là stream, ta gom lại thành string
-            let text = await body.text();
-            
-            const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
-            
-            const newText = text.split("\n").map(line => {
-                line = line.trim();
-                if (!line || line.startsWith("#")) return line;
-                
-                try {
-                    const absoluteUrl = new url.URL(line, baseUrl).href;
-                    return `${req.protocol}://${req.get("host")}/live?url=${encodeURIComponent(absoluteUrl)}`;
-                } catch (e) {
-                    return line;
-                }
-            }).join("\n");
-
-            res.removeHeader("content-length");
-            return res.send(newText);
-        }
-
-        // 5. Pipe stream dữ liệu gốc (TS, FLV...)
-        // Tối ưu Latency: Tắt Nagle's algorithm để gửi gói tin đi ngay lập tức
-        if (res.socket) {
-            res.socket.setNoDelay(true);
-        }
-
-        // undici body là Node stream, pipe thẳng được luôn -> Hiệu năng cao
-        res.status(statusCode);
-        body.pipe(res);
-
-        // Xử lý lỗi khi pipe đứt gánh
-        body.on('error', (err) => {
-            console.error('Body stream error:', err.message);
-            res.end();
-        });
-
-        res.on('close', () => {
-             // Khi client ngắt kết nối, hủy stream từ nguồn
-             body.destroy();
-        });
-
-    } catch (error) {        if (error.name !== 'AbortError') {
-            console.error(`Proxy error [${targetUrl}]:`, error.message);
-            if (!res.headersSent) res.status(502).send("Bad Gateway");
-        }
+    if (statusCode >= 400) {
+      try { await body.dump(); } catch {}
+      throw new Error(`Stream error: ${statusCode}`);
     }
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cloudflare-CDN-Cache-Control", "no-store");
+    res.setHeader("CDN-Cache-Control", "no-store");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    const forwardHeaders = [
+      "content-type", "content-length", "content-range",
+      "accept-ranges", "last-modified", "etag"
+    ];
+
+    forwardHeaders.forEach(h => {
+      if (respHeaders[h]) res.setHeader(h, respHeaders[h]);
+    });
+
+    const isM3u8 = respHeaders["content-type"]?.includes("mpegurl") || targetUrl.includes(".m3u8");
+
+    if (isM3u8 && statusCode === 200) {
+      const text = await body.text();
+      const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
+
+      const newText = text.split("\n").map(line => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) return trimmed;
+        try {
+          const absUrl = new URL(trimmed, baseUrl).href;
+          return `${req.protocol}://${req.get("host")}/live?url=${encodeURIComponent(absUrl)}`;
+        } catch { return trimmed; }
+      }).join("\n");
+
+      res.removeHeader("content-length");
+      return res.send(newText);
+    }
+
+    if (res.socket) res.socket.setNoDelay(true);
+    res.status(statusCode);
+    body.pipe(res);
+
+    body.on('error', (err) => {
+      console.error('Body stream error:', err.message);
+      res.end();
+    });
+
+    res.on('close', () => body.destroy());
+
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      console.error(`Proxy error [${targetUrl}]:`, error.message);
+      if (!res.headersSent) res.status(502).send("Bad Gateway");
+    }
+  }
 });
 
 app.get("/", async (req, res) => {
-    try {
-        let content = "";
-        // Kiểm tra file playlist.m3u có tồn tại không
-        if (fs.existsSync(PLAYLIST_FILE)) {
-             content = fs.readFileSync(PLAYLIST_FILE, "utf-8");
-        } else {
-            console.log("Playlist file not found. Generating new one...");
-            content = await generateIPTVFile();
-            if (content) fs.writeFileSync(PLAYLIST_FILE, content);
-        }
-
-        if (!content || content.trim() === "") {
-            return res.status(404).send("No playlist available.");
-        }
-
-        // Rewrite URL trong playlist thành Proxy URL NẾU có prefix PROXY://
-        const host = req.get("host");
-        const protocol = req.protocol;
-        
-        const proxiedContent = content.split("\n").map(line => {
-            const trimmed = line.trim();
-            if (trimmed.startsWith("PROXY://")) {
-                // Xóa prefix và chuyển thành link proxy
-                const originalUrl = trimmed.replace("PROXY://", "");
-                return `${protocol}://${host}/live?url=${encodeURIComponent(originalUrl)}`;
-            }
-            // Nếu không có prefix, giữ nguyên (Direct Link)
-            return line;
-        }).join("\n");
-
-        res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
-        res.setHeader("Content-Disposition", 'attachment; filename="playlist.m3u"');
-        
-        // Cache playlist trong 30s để giảm tải cho VPS (hợp lệ với Cloudflare)
-        res.setHeader("Cache-Control", "public, max-age=30");
-        res.setHeader("Cloudflare-CDN-Cache-Control", "max-age=30");
-
-        res.send(proxiedContent);
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).send("Error generating playlist");
+  try {
+    let content = "";
+    if (fs.existsSync(PLAYLIST_FILE)) {
+      content = fs.readFileSync(PLAYLIST_FILE, "utf-8");
+    } else {
+      console.log("Playlist not found. Generating...");
+      content = await generateIPTVFile();
+      if (content) fs.writeFileSync(PLAYLIST_FILE, content);
     }
+
+    if (!content?.trim()) return res.status(404).send("No playlist available.");
+
+    const host = req.get("host");
+    const protocol = req.protocol;
+
+    const proxiedContent = content.split("\n").map(line => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("PROXY://")) {
+        const url = trimmed.replace("PROXY://", "");
+        return `${protocol}://${host}/live?url=${encodeURIComponent(url)}`;
+      }
+      return line;
+    }).join("\n");
+
+    res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
+    res.setHeader("Content-Disposition", 'attachment; filename="playlist.m3u"');
+    res.setHeader("Cache-Control", "public, max-age=30");
+    res.setHeader("Cloudflare-CDN-Cache-Control", "max-age=30");
+
+    res.send(proxiedContent);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Error generating playlist");
+  }
 });
 
 const port = config.port;
 const server = app.listen(port, () => console.log(`Listening on http://localhost:${port}`));
 
-// Tối quan trọng: Tắt timeout mặc định của server
-// Mặc định Node.js sẽ ngắt kết nối sau 2 phút nếu không có hoạt động,
-// hoặc giới hạn thời gian request. Với Livestream (kéo dài hàng giờ), cần set về 0 (vô hạn).
 server.timeout = 0;
-server.keepAliveTimeout = 60000 * 60; // 1 tiếng
+server.keepAliveTimeout = 3600000; // 1 hour

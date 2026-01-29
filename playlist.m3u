@@ -1,0 +1,79 @@
+#EXTM3U tvg-shift=0 m3uautoload=1
+
+#EXTINF:-1 tvg-name="🔴 Al Sharjah vs Al Bataeh | 22:45 ⚽" tvg-logo="https://img.thesports.com/football/competition/e1e3b1cf7d699effd7e411de04d89189.png" group-title="United Arab Emirates Adnoc Pro-League",🔴 Al Sharjah vs Al Bataeh | 22:45 ⚽ | 1488ms 🟡
+PROXY://https://2988376792.global.cdnfastest.com/auto_hls/965mkyhkog30r1g_football_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="🔴 Olympiakos Piraeus vs PAOK Saloniki | 23:30 ⚽" tvg-logo="https://img.thesports.com/football/competition/1bf163c9c97591667d1da9330b17140d.png" group-title="Greek Cup",🔴 Olympiakos Piraeus vs PAOK Saloniki | 23:30 ⚽ | 1838ms 🟠
+PROXY://https://rblive.starxcdn.xyz/live/689c7d152eeb894ab75a5340_n54qllhnp38nqvy_football_fhd.flv
+
+#EXTINF:-1 tvg-name="🔴 Senegal vs Egypt | 00:00 ⚽" tvg-logo="https://img.thesports.com/football/competition/dc00471256fd2162677840453cbb2cee.png" group-title="CAF Africa Cup of Nations",🔴 Senegal vs Egypt | 00:00 ⚽ | 1510ms 🟠
+PROXY://https://rblive.starxcdn.xyz/live/689c20a777c99958a671aa1d_8yomo4h1g5p3q0j_football_fhd.flv
+
+#EXTINF:-1 tvg-name="Wolfsburg vs St. Pauli | 00:30 ⚽" tvg-logo="https://img.thesports.com/football/competition/0c6a25cd746e802296d9064b4504179d.png" group-title="Bundesliga",Wolfsburg vs St. Pauli | 00:30 ⚽
+https://rblive.starxcdn.xyz/live/689c20bb4aa468ea436d2cfd_4wyrn4h6eon4q86_football_fhd.flv
+
+#EXTINF:-1 tvg-name="Al Shabab FC vs NEOM SC | 00:30 ⚽" tvg-logo="https://static.nutscdn.com/vimg/300-0/aac5b9730dc1d8711d36ab294734683f.png" group-title="Saudi Professional League",Al Shabab FC vs NEOM SC | 00:30 ⚽
+https://2988376792.global.cdnfastest.com/auto_hls/8yomo4h1zyp2q0j_football_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="Al-Ahli SFC vs Al Taawoun | 00:30 ⚽" tvg-logo="https://static.nutscdn.com/vimg/300-0/aac5b9730dc1d8711d36ab294734683f.png" group-title="Saudi Professional League",Al-Ahli SFC vs Al Taawoun | 00:30 ⚽
+https://rblive.starxcdn.xyz/live/689c20cf37c4edde592f58ea_x7lm7phjpx20m2w_football_fhd.flv
+
+#EXTINF:-1 tvg-name="Beyoglu Yeni Carsi vs Fenerbahce | 00:30 ⚽" tvg-logo="https://img.thesports.com/football/competition/df788219029240c7d067b3e9c69cc56e.png" group-title="Turkish Cup",Beyoglu Yeni Carsi vs Fenerbahce | 00:30 ⚽
+https://rblive.starxcdn.xyz/live/689c8fd35ae37172a548f9ed_zp5rzghgw9ojq82_football_fhd.flv
+
+#EXTINF:-1 tvg-name="Napoli vs Parma | 00:30 ⚽" tvg-logo="https://static.nutscdn.com/vimg/300-0/061deb88fc4d2e179092f3f22136b0b2.png" group-title="Italian Serie A",Napoli vs Parma | 00:30 ⚽
+https://rblive.starxcdn.xyz/live/689c914a66f7b7eee4c190db_k82rekhgv5vprep_football_fhd.flv
+
+#EXTINF:-1 tvg-name="Den Bosch vs PSV Eindhoven | 00:45 ⚽" tvg-logo="https://img.thesports.com/football/competition/9bbacfe2202a2caa2f29607d758b3f54.png" group-title="Netherlands KNVB Cup",Den Bosch vs PSV Eindhoven | 00:45 ⚽
+https://rblive.starxcdn.xyz/live/6908bda8bb43a99996b06469_4jwq2ghnz1e0m0v_football_fhd.flv
+
+#EXTINF:-1 tvg-name="Panathinaikos vs Aris Thessaloniki | 01:30 ⚽" tvg-logo="https://img.thesports.com/football/competition/1bf163c9c97591667d1da9330b17140d.png" group-title="Greek Cup",Panathinaikos vs Aris Thessaloniki | 01:30 ⚽
+https://2988376792.global.cdnfastest.com/auto_hls/x7lm7phj3vw3m2w_football_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="Fafe vs Sporting Braga | 01:45 ⚽" tvg-logo="https://img.thesports.com/football/competition/8a441eec56ff81f47f8e927fe2708587.png" group-title="Portuguese Cup",Fafe vs Sporting Braga | 01:45 ⚽
+https://2988376792.global.cdnfastest.com/auto_hls/4wyrn4h6o017q86_football_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="Projekt Warszawa vs Jastrzebski | 02:00 🏐" tvg-logo="https://img.thesports.com/volleyball/competition/d7723bacef1a7427f4137b619588a7cb.png" group-title="PlusLiga",Projekt Warszawa vs Jastrzebski | 02:00 🏐
+https://2988376792.global.cdnfastest.com/auto_hls/y0or58h9wnowrwz_volleyball_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="Almere City FC vs SC Telstar | 02:00 ⚽" tvg-logo="https://img.thesports.com/football/competition/9bbacfe2202a2caa2f29607d758b3f54.png" group-title="Netherlands KNVB Cup",Almere City FC vs SC Telstar | 02:00 ⚽
+https://2988376792.global.cdnfastest.com/auto_hls/1l4rjnh9je4em7v_football_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="Go Ahead Eagles vs Heracles Almelo | 02:00 ⚽" tvg-logo="https://img.thesports.com/football/competition/9bbacfe2202a2caa2f29607d758b3f54.png" group-title="Netherlands KNVB Cup",Go Ahead Eagles vs Heracles Almelo | 02:00 ⚽
+https://2988376792.global.cdnfastest.com/auto_hls/318q66hx6kwwqo9_football_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="Modena vs Trentino | 02:30 🏐" tvg-logo="https://img.thesports.com/volleyball/competition/910703213762c57461ec4e4c6fad1e4a.png" group-title="SuperLega",Modena vs Trentino | 02:30 🏐
+https://2988376792.global.cdnfastest.com/auto_hls/zp5rzdh3gz7zq82_volleyball_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="FC Köln vs Bayern Munich | 02:30 ⚽" tvg-logo="https://img.thesports.com/football/competition/0c6a25cd746e802296d9064b4504179d.png" group-title="Bundesliga",FC Köln vs Bayern Munich | 02:30 ⚽
+https://rblive.starxcdn.xyz/live/689c20cf37c4edde592f58ea_ednm9whw92ljryo_football_fhd.flv
+
+#EXTINF:-1 tvg-name="Hoffenheim vs Borussia M’gladbach | 02:30 ⚽" tvg-logo="https://img.thesports.com/football/competition/0c6a25cd746e802296d9064b4504179d.png" group-title="Bundesliga",Hoffenheim vs Borussia M’gladbach | 02:30 ⚽
+https://2988376792.global.cdnfastest.com/auto_hls/y39mp1h650nvmoj_football_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="RB Leipzig vs Freiburg | 02:30 ⚽" tvg-logo="https://img.thesports.com/football/competition/0c6a25cd746e802296d9064b4504179d.png" group-title="Bundesliga",RB Leipzig vs Freiburg | 02:30 ⚽
+https://rblive.starxcdn.xyz/live/693598fc4387963e46b9b127_318q66hx06p0qo9_football_fhd.flv
+
+#EXTINF:-1 tvg-name="Inter vs Lecce | 02:45 ⚽" tvg-logo="https://static.nutscdn.com/vimg/300-0/061deb88fc4d2e179092f3f22136b0b2.png" group-title="Italian Serie A",Inter vs Lecce | 02:45 ⚽
+https://rblive.starxcdn.xyz/live/689c20a777c99958a671aa1d_ednm9whwkjkpryo_football_fhd.flv
+
+#EXTINF:-1 tvg-name="Albacete vs Real Madrid | 03:00 ⚽" tvg-logo="https://img.thesports.com/football/competition/7067abeb61660895f3ca0227675ef16f.png" group-title="Copa del Rey",Albacete vs Real Madrid | 03:00 ⚽
+https://rblive.starxcdn.xyz/live/689c8fd35ae37172a548f9ed_y39mp1h60og0moj_football_fhd.flv
+
+#EXTINF:-1 tvg-name="Alavés vs Vallecano | 03:00 ⚽" tvg-logo="https://img.thesports.com/football/competition/7067abeb61660895f3ca0227675ef16f.png" group-title="Copa del Rey",Alavés vs Vallecano | 03:00 ⚽
+https://2988376792.global.cdnfastest.com/auto_hls/k82rekhg0epwrep_football_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="Real Betis vs Elche CF | 03:00 ⚽" tvg-logo="https://img.thesports.com/football/competition/7067abeb61660895f3ca0227675ef16f.png" group-title="Copa del Rey",Real Betis vs Elche CF | 03:00 ⚽
+https://2988376792.global.cdnfastest.com/auto_hls/dn1m1ghlpxy9moe_football_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="Chelsea vs Arsenal | 03:00 ⚽" tvg-logo="https://img.thesports.com/football/competition/8aa596d6e755efdca6776d946ebfcd32.png" group-title="English Football League Cup",Chelsea vs Arsenal | 03:00 ⚽
+https://rblive.starxcdn.xyz/live/689c20bb4aa468ea436d2cfd_3glrw7hn3lnzqdy_football_fhd.flv
+
+#EXTINF:-1 tvg-name="AZ Alkmaar vs AFC Ajax | 03:00 ⚽" tvg-logo="https://img.thesports.com/football/competition/9bbacfe2202a2caa2f29607d758b3f54.png" group-title="Netherlands KNVB Cup",AZ Alkmaar vs AFC Ajax | 03:00 ⚽
+https://2988376792.global.cdnfastest.com/auto_hls/k82rekhg01w0rep_football_fhd/index.m3u8
+
+#EXTINF:-1 tvg-name="Nigeria vs Morocco | 03:00 ⚽" tvg-logo="https://img.thesports.com/football/competition/dc00471256fd2162677840453cbb2cee.png" group-title="CAF Africa Cup of Nations",Nigeria vs Morocco | 03:00 ⚽
+https://rblive.starxcdn.xyz/live/689c914a66f7b7eee4c190db_6ypq3nhv749vmd7_football_fhd.flv
+
+#EXTINF:-1 tvg-name="FC Porto vs Benfica | 03:45 ⚽" tvg-logo="https://img.thesports.com/football/competition/8a441eec56ff81f47f8e927fe2708587.png" group-title="Portuguese Cup",FC Porto vs Benfica | 03:45 ⚽
+https://rblive.starxcdn.xyz/live/6908bda8bb43a99996b06469_dn1m1ghlpkd1moe_football_fhd.flv

@@ -1,5 +1,3 @@
-require('dotenv').config();
-
 function getInt(value, defaultValue) {
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;

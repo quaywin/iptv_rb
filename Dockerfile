@@ -1,16 +1,13 @@
-FROM node:20-slim
-
-# Install PM2 globally
-RUN npm install pm2 -g
+FROM oven/bun:slim
 
 # Create app directory
 WORKDIR /usr/src/app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json bun.lock ./
 
 # Install app dependencies
-RUN npm install --production
+RUN bun install --production
 
 # Copy app source
 COPY . .
@@ -18,6 +15,5 @@ COPY . .
 # Expose the port the app runs on
 EXPOSE 3030
 
-# Use PM2 to run the application as defined in ecosystem.config.js
-# --no-daemon is required for Docker to keep the container running
-CMD ["pm2-runtime", "ecosystem.config.js"]
+# Use a shell script to run both worker and server
+CMD ["./entrypoint.sh"]

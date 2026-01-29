@@ -9,122 +9,58 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR);
 }
 const PLAYLIST_FILE = path.join(DATA_DIR, "playlist.m3u");
-const CHECK_INTERVAL = config.checkInterval; // Từ config
-const TIMEOUT = config.timeout; // Từ config
-const PROXY_THRESHOLD = config.proxyThreshold; // Từ config
 
-// Hàm delay
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Hàm check stream health (HEAD request)
-async function checkStream(url) {
-  const start = Date.now();
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
-
-    const response = await fetch(url, {
-      method: "HEAD", // Chỉ lấy header để check nhanh
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeoutId);
-
-    const latency = Date.now() - start;
-
-    if (response.ok) {
-      return { alive: true, latency };
-    } else {
-      return { alive: false, latency: 0, error: response.status };
-    }
-  } catch (error) {
-    return { alive: false, latency: 0, error: "timeout/error" };
-  }
-}
-
-// Hàm xử lý chính
+// Main logic
 async function runWorker() {
-  console.log(`[${new Date().toISOString()}] Bắt đầu chu trình tạo và kiểm tra playlist...`);
+  console.log(`[${new Date().toISOString()}] Starting playlist update...`);
 
   try {
-    // 1. Generate nội dung gốc
-    let originalContent = await generateIPTVFile();
-    if (!originalContent) {
-      console.log("⚠️ Không tạo được nội dung playlist.");
-      return;
-    }
+    const originalContent = await generateIPTVFile();
+    if (!originalContent) return console.log("⚠️ Failed to generate playlist.");
 
-    // 2. Parse M3U để lấy danh sách cần check
-    // Tách thành các dòng
     const lines = originalContent.split("\n");
     const newLines = [];
-    
-    // Buffer để giữ thông tin entry hiện tại
-    let currentEntry = []; 
+    let currentEntry = [];
     let isLive = false;
 
-    // Duyệt qua từng dòng để xử lý
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      
-      if (line.startsWith("#EXTINF")) {
-        // Bắt đầu 1 entry mới
-        currentEntry = [line];
-        // Check xem có phải live không (có icon 🔴)
-        isLive = line.includes("🔴");
-      } else if (line.startsWith("http") || line.startsWith("PROXY://")) {
-        // Đây là dòng URL (có thể đã có prefix từ lần run trước nếu đọc file cũ, nhưng đây là generate mới nên ok)
-        let url = line;
-        
-        // Nếu là Live -> Không cần check ping, tạo luôn 2 luồng (Direct + Proxy)
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      if (trimmed.startsWith("#EXTINF")) {
+        currentEntry = [trimmed];
+        isLive = trimmed.includes("🔴");
+      } else if (trimmed.startsWith("http") || trimmed.startsWith("PROXY://")) {
         if (isLive) {
-          // 1. LUỒNG CHÍNH (DIRECT)
-          // Giữ nguyên title gốc từ generate.js (không có thông tin ping)
-          newLines.push(...currentEntry);
-          newLines.push(line); 
-          newLines.push("");
+          // Add Direct
+          newLines.push(...currentEntry, trimmed, "");
 
-          // 2. LUỒNG PHỤ (BACKUP - FORCE PROXY)
-          // Tạo title mới có suffix [Backup]
-          let infLine = currentEntry[0];
-          const lastCommaIndex = infLine.lastIndexOf(",");
-          
-          if (lastCommaIndex !== -1) {
-             const metaPart = infLine.substring(0, lastCommaIndex);
-             const rawTitle = infLine.substring(lastCommaIndex + 1);
-             const backupTitle = `${rawTitle} [Backup]`;
-             
-             newLines.push(`${metaPart},${backupTitle}`);
-             newLines.push(`PROXY://${line}`);
-             newLines.push("");
+          // Add Backup (Proxy)
+          const inf = currentEntry[0];
+          const lastComma = inf.lastIndexOf(",");
+          if (lastComma !== -1) {
+            const meta = inf.substring(0, lastComma);
+            const title = inf.substring(lastComma + 1);
+            newLines.push(`${meta},${title} [Backup]`, `PROXY://${trimmed}`, "");
           }
-
-          currentEntry = []; // Reset buffer
         } else {
-            // Không phải live, giữ nguyên URL
-            currentEntry.push(url);
-            newLines.push(...currentEntry);
-            newLines.push("");
-            currentEntry = [];
+          newLines.push(...currentEntry, trimmed, "");
         }
-      } else if (line.startsWith("#EXTM3U")) {
-        newLines.push(line);
-        newLines.push("");
+        currentEntry = [];
+      } else if (trimmed.startsWith("#EXTM3U")) {
+        newLines.push(trimmed, "");
       }
     }
 
-    // 3. Ghi file
     const finalContent = newLines.join("\n");
     fs.writeFileSync(PLAYLIST_FILE, finalContent);
-    console.log(`✅ Đã cập nhật playlist.m3u (${(finalContent.match(/#EXTINF/g) || []).length} kênh)`);
+    const count = (finalContent.match(/#EXTINF/g) || []).length;
+    console.log(`✅ Updated playlist.m3u (${count} channels)`);
 
   } catch (error) {
-    console.error("❌ Lỗi trong worker:", error);
+    console.error("❌ Worker error:", error);
   }
 }
 
-// Chạy ngay lần đầu
 runWorker();
-
-// Lặp lại mỗi 5 phút
-setInterval(runWorker, CHECK_INTERVAL);
+setInterval(runWorker, config.checkInterval);
