@@ -1,147 +1,142 @@
-const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const url = require("url");
-const { Readable } = require("stream");
 const config = require("./config");
 const { generateIPTVFile } = require("./generate");
-const { setGlobalDispatcher, Agent, request } = require('undici');
 
-// Optimized Global Agent (Keep-Alive)
-const agent = new Agent({
-  connect: {
-    keepAlive: true,
-    keepAliveTimeout: 15000,
-    timeout: 30000
-  },
-  connections: 500, // Important for streaming
-  pipelining: 1,
-});
-setGlobalDispatcher(agent);
-
-const app = express();
 const DATA_DIR = path.join(__dirname, "data");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 const PLAYLIST_FILE = path.join(DATA_DIR, "playlist.m3u");
 
-// Proxy endpoint
-app.get("/live", async (req, res) => {
-  const targetUrl = req.query.url;
-  if (!targetUrl) return res.status(400).send("Missing URL");
+const server = Bun.serve({
+  port: config.port,
+  async fetch(req) {
+    const url = new URL(req.url);
 
-  try {
-    const headers = {
-      "User-Agent": config.userAgent,
-      "Referer": config.referer,
-      "Origin": config.origin,
-      "Connection": "keep-alive"
-    };
+    // 1. Proxy Endpoint (/live)
+    if (url.pathname === "/live") {
+      const targetUrl = url.searchParams.get("url");
+      if (!targetUrl) return new Response("Missing URL", { status: 400 });
 
-    if (req.headers.range) headers["Range"] = req.headers.range;
+      try {
+        const headers = {
+          "User-Agent": config.userAgent,
+          "Referer": config.referer,
+          "Origin": config.origin,
+          "Connection": "keep-alive"
+        };
 
-    const { statusCode, headers: respHeaders, body } = await request(targetUrl, {
-      method: 'GET',
-      headers
-    });
+        const range = req.headers.get("range");
+        if (range) headers["Range"] = range;
 
-    if (statusCode >= 400) {
-      try { await body.dump(); } catch {}
-      throw new Error(`Stream error: ${statusCode}`);
-    }
+        const response = await fetch(targetUrl, { headers });
 
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Cloudflare-CDN-Cache-Control", "no-store");
-    res.setHeader("CDN-Cache-Control", "no-store");
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
+        if (!response.ok) {
+          return new Response(`Stream error: ${response.status}`, { status: 502 });
+        }
 
-    const forwardHeaders = [
-      "content-type", "content-length", "content-range",
-      "accept-ranges", "last-modified", "etag"
-    ];
+        // Headers to forward
+        const forwardHeaders = new Headers({
+          "Access-Control-Allow-Origin": "*",
+          "Cloudflare-CDN-Cache-Control": "no-store",
+          "CDN-Cache-Control": "no-store",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0"
+        });
 
-    forwardHeaders.forEach(h => {
-      if (respHeaders[h]) res.setHeader(h, respHeaders[h]);
-    });
+        const headersToCopy = [
+          "content-type", "content-length", "content-range",
+          "accept-ranges", "last-modified", "etag"
+        ];
 
-    const isM3u8 = respHeaders["content-type"]?.includes("mpegurl") || targetUrl.includes(".m3u8");
+        for (const h of headersToCopy) {
+          const val = response.headers.get(h);
+          if (val) forwardHeaders.set(h, val);
+        }
 
-    if (isM3u8 && statusCode === 200) {
-      const text = await body.text();
-      const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
+        const contentType = response.headers.get("content-type") || "";
+        const isM3u8 = contentType.includes("mpegurl") || targetUrl.includes(".m3u8");
 
-      const newText = text.split("\n").map(line => {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) return trimmed;
-        try {
-          const absUrl = new URL(trimmed, baseUrl).href;
-          return `${req.protocol}://${req.get("host")}/live?url=${encodeURIComponent(absUrl)}`;
-        } catch { return trimmed; }
-      }).join("\n");
+        // Handle M3U8 Rewrite
+        if (isM3u8 && response.status === 200) {
+          const text = await response.text();
+          const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
+          const host = req.headers.get("host");
+          const protocol = url.protocol;
 
-      res.removeHeader("content-length");
-      return res.send(newText);
-    }
+          const newText = text.split("\n").map(line => {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith("#")) return trimmed;
+            try {
+              const absUrl = new URL(trimmed, baseUrl).href;
+              return `${protocol}//${host}/live?url=${encodeURIComponent(absUrl)}`;
+            } catch { return trimmed; }
+          }).join("\n");
 
-    if (res.socket) res.socket.setNoDelay(true);
-    res.status(statusCode);
-    body.pipe(res);
+          forwardHeaders.delete("content-length");
+          return new Response(newText, { headers: forwardHeaders });
+        }
 
-    body.on('error', (err) => {
-      console.error('Body stream error:', err.message);
-      res.end();
-    });
+        // Direct stream pipe (native Bun optimization)
+        return new Response(response.body, {
+          status: response.status,
+          headers: forwardHeaders
+        });
 
-    res.on('close', () => body.destroy());
-
-  } catch (error) {
-    if (error.name !== 'AbortError') {
-      console.error(`Proxy error [${targetUrl}]:`, error.message);
-      if (!res.headersSent) res.status(502).send("Bad Gateway");
-    }
-  }
-});
-
-app.get("/", async (req, res) => {
-  try {
-    let content = "";
-    if (fs.existsSync(PLAYLIST_FILE)) {
-      content = fs.readFileSync(PLAYLIST_FILE, "utf-8");
-    } else {
-      console.log("Playlist not found. Generating...");
-      content = await generateIPTVFile();
-      if (content) fs.writeFileSync(PLAYLIST_FILE, content);
-    }
-
-    if (!content?.trim()) return res.status(404).send("No playlist available.");
-
-    const host = req.get("host");
-    const protocol = req.protocol;
-
-    const proxiedContent = content.split("\n").map(line => {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("PROXY://")) {
-        const url = trimmed.replace("PROXY://", "");
-        return `${protocol}://${host}/live?url=${encodeURIComponent(url)}`;
+      } catch (error) {
+        console.error(`Proxy error [${targetUrl}]:`, error.message);
+        return new Response("Bad Gateway", { status: 502 });
       }
-      return line;
-    }).join("\n");
+    }
 
-    res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
-    res.setHeader("Content-Disposition", 'attachment; filename="playlist.m3u"');
-    res.setHeader("Cache-Control", "public, max-age=30");
-    res.setHeader("Cloudflare-CDN-Cache-Control", "max-age=30");
+    // 2. Playlist Endpoint (/)
+    if (url.pathname === "/") {
+      try {
+        const file = Bun.file(PLAYLIST_FILE);
+        let content = "";
 
-    res.send(proxiedContent);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Error generating playlist");
-  }
+        if (await file.exists()) {
+          content = await file.text();
+        } else {
+          console.log("Playlist not found. Generating...");
+          content = await generateIPTVFile();
+          if (content) await Bun.write(PLAYLIST_FILE, content);
+        }
+
+        if (!content?.trim()) return new Response("No playlist available", { status: 404 });
+
+        const host = req.headers.get("host");
+        const protocol = url.protocol;
+
+        const proxiedContent = content.split("\n").map(line => {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("PROXY://")) {
+            const originalUrl = trimmed.replace("PROXY://", "");
+            return `${protocol}//${host}/live?url=${encodeURIComponent(originalUrl)}`;
+          }
+          return line;
+        }).join("\n");
+
+        return new Response(proxiedContent, {
+          headers: {
+            "Content-Type": "application/vnd.apple.mpegurl",
+            "Content-Disposition": 'attachment; filename="playlist.m3u"',
+            "Cache-Control": "public, max-age=30",
+            "Cloudflare-CDN-Cache-Control": "max-age=30"
+          }
+        });
+
+      } catch (error) {
+        console.error(error);
+        return new Response("Error generating playlist", { status: 500 });
+      }
+    }
+
+    return new Response("Not Found", { status: 404 });
+  },
+  // Idle timeout for connections (seconds). Default is 10.
+  // Bun has a max limit for idleTimeout in some versions, setting to 30s.
+  idleTimeout: 30,
 });
 
-const port = config.port;
-const server = app.listen(port, () => console.log(`Listening on http://localhost:${port}`));
-
-server.timeout = 0;
-server.keepAliveTimeout = 3600000; // 1 hour
+console.log(`Listening on http://localhost:${server.port}`);
