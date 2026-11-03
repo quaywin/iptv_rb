@@ -3,21 +3,35 @@ function getInt(value, defaultValue) {
   return isNaN(parsed) ? defaultValue : parsed;
 }
 
+const env = (typeof process !== "undefined" && process && process.env) ? process.env : {};
+
 const config = {
-  port: process.env.PORT || 3030,
-  vpsUrl: process.env.VPS_URL || "",
-  apiBaseUrl: process.env.API_BASE_URL || "https://rbapi.online/v1",
-  referer: process.env.REFERER || "https://robong.cc/",
-  origin: process.env.ORIGIN || "https://robong.cc",
-  userAgent: process.env.USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  backupStreamBase: process.env.BACKUP_STREAM_BASE || "https://2988376792.global.cdnfastest.com",
-  primaryStreamBase: process.env.PRIMARY_STREAM_BASE || "https://rblive.starxcdn.xyz",
-  checkInterval: getInt(process.env.CHECK_INTERVAL, 5 * 60 * 1000),
-  timeout: getInt(process.env.TIMEOUT, 2000),
-  proxyThreshold: getInt(process.env.PROXY_THRESHOLD, 500),
-  hoursBack: getInt(process.env.HOURS_BACK, 6),
-  hoursAhead: getInt(process.env.HOURS_AHEAD, 24),
-  hoursLookingAhead: getInt(process.env.HOURS_LOOKING_AHEAD, 24),
+  port: env.PORT || 3030,
+  vpsUrl: env.VPS_URL || "",
+  streamApiUrl: env.STREAM_API_URL || "https://strmfree.st/streams",
+  ppvApiUrl: env.PPV_API_URL || "https://corsproxy.io/?key=c433bce8&url=https%3A%2F%2Fapi.ppv.st%2Fapi%2Fstreams",
+  timApiUrl: env.TIM_API_URL || "https://tim-streams.com/api/live-upcoming",
+  timChannelsUrl: env.TIM_CHANNELS_URL || "https://tim-streams.com/api/channels",
+  timWatchBaseUrl: env.TIM_WATCH_BASE_URL || "https://tim-streams.com/api/watch",
+  gkApiUrl: env.GK_API_URL || "https://api.reedstreams.link/api/matches/all",
+  sportsbiteChannelsUrl: env.SPORTSBITE_CHANNELS_URL || "https://sportsbite.org/api/forestgump/channels",
+  pitApiUrl: env.PIT_API_URL || "https://pitsport.st/api/v1/home",
+  cineApiUrl: env.CINE_API_URL || "https://cinevid.st/api/public/events",
+  vidcdnChannelsUrl: env.VIDCDN_CHANNELS_URL || "https://vidcdn.vip/api/channels",
+  cineEmbedChannelBaseUrl: env.CINE_EMBED_CHANNEL_BASE_URL || "https://cinevid.st/embed/channel",
+  scrapeServiceUrl: env.SCRAPE_SERVICE_URL || "https://proxy.quaywin.com/scrape-stream?proxy=true",
+  strmScrapeServiceUrl: env.STRM_SCRAPE_SERVICE_URL || "https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true",
+  cineScrapeServiceUrl: env.CINE_SCRAPE_SERVICE_URL || "https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true",
+  embedBaseUrl: env.EMBED_BASE_URL || "https://strmfree.st/embed",
+  referer: env.REFERER || "https://strmfree.st/",
+  origin: env.ORIGIN || "https://strmfree.st",
+  userAgent: env.USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  checkInterval: getInt(env.CHECK_INTERVAL, 5 * 60 * 1000),
+  cacheTtl: getInt(env.CACHE_TTL, 60), // in seconds
+  timeout: getInt(env.TIMEOUT, 5000),
+  hoursBack: getInt(env.HOURS_BACK, 4),
+  hoursAhead: getInt(env.HOURS_AHEAD, 24),
+  timezone: env.TIMEZONE || "Asia/Ho_Chi_Minh",
 };
 
 module.exports = config;

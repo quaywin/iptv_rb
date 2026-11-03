@@ -1,85 +1,145 @@
 # IPTV RB - Playlist Generator & Stream Proxy
 
-A Node.js based IPTV solution that automatically generates playlists from sports match schedules and provides a high-performance streaming proxy to bypass referer/origin restrictions.
+A Bun-based high-performance IPTV solution that automatically generates playlists from `strmfree.st` sports match schedules and 24/7 channels, resolves M3U8 feeds via an external scraper microservice, and proxies streams to bypass anti-hotlink restrictions.
+
+## Architecture & Data Flow
+
+1. **Stream List Ingestion**: Fetches active streams and schedules from `https://strmfree.st/streams` (covering Soccer, Basketball, Football, Hockey, Combat, Baseball, Racing, Tennis, Cricket).
+2. **Embed & Scrape Resolution**:
+   - Embed URL format: `https://strmfree.st/embed/{category}/{stream_key}` (e.g. `1080p` or standard).
+   - Scrape Microservice: `https://proxy.quaywin.com/scrape-stream?proxy=true&url={embed_url}` returns HTTP 302 or 200 with proxied `.m3u8` manifest.
+3. **High-Performance Bun Proxy (`/live`)**:
+   - Follows upstream 302 redirects to find the active CDN manifest.
+   - Dynamically parses and rewrites M3U8 chunk and sub-playlist URLs through the local proxy.
+   - Injects required upstream anti-hotlink headers (`Referer: https://strmfree.st/`, `Origin: https://strmfree.st`).
+   - Normalizes disguised chunk files (`.js`, `.ts`, `image/png`) to `Content-Type: video/mp2t` for full compatibility with strict IPTV players (TiviMate, OTT Navigator, VLC, Smart TVs).
 
 ## Features
 
-- **Automated Playlist Generation**: Fetches match schedules for Football, Volleyball, and Tennis.
-- **Dynamic Content**: Automatically marks live matches and those starting soon with a 🔴 indicator.
-- **Smart Stream Selection**: Automatically chooses between primary and backup stream sources.
-- **High-Performance Proxy**: Uses `undici` for efficient streaming with Keep-Alive support and M3U8 rewrite capabilities.
-- **Health Monitoring**: Background worker periodically refreshes the playlist and checks stream health.
-- **Environment-Based Config**: Fully configurable via environment variables (no hardcoded URLs or IPs).
+- **Automated Multi-Sport Playlist**: Covers all 9 sports categories plus continuous 24/7 channels (Sky Sports F1, Willow, RedZone, etc.).
+- **Live Status Detection**: Marks currently playing, ongoing, or starting-soon matches with 🔴.
+- **High Quality 1080p Streams**: Generates clean 1080p stream entries directly mapped to each event.
+- **Bun Native Streaming**: High-throughput, low-latency streaming pipeline using Bun's native HTTP server and `fetch`.
+- **Environment-Based Config**: Fully customizable via `.env`.
 
 ## Project Structure
 
-- `server.js`: Main Express server handling the playlist delivery and stream proxying.
-- `generate.js`: Core logic for fetching API data and building the M3U content.
-- `worker.js`: Background task that runs periodically to keep the playlist updated.
-- `config.js`: Centralized configuration management using `dotenv`.
-- `api/playlist.js`: Vercel-ready serverless function for proxying the playlist.
+- `providers/`: Modular scrapers and playlist generators for each independent stream provider.
+  - `strm.js`: Handler for `strmfree.st`.
+  - `ppv.js`: Handler for `api.ppv.st`.
+  - `tim-live.js`: Handler for `tim-streams.com` live match events.
+  - `tim-channels.js`: Handler for `tim-streams.com` 219 24/7 channels grouped by country.
+  - `channel2.js`: Handler for `sportsbite.org` 830+ 24/7 channels grouped by 47 countries.
+  - `channel3.js`: Handler for `vidcdn.vip` 980+ 24/7 TV channels grouped by 48+ countries.
+  - `gk.js`: Handler for `api.reedstreams.link` (ReedStreams / GK).
+  - `pit.js`: Handler for `pitsport.st` (PitSport live & upcoming matches / racing).
+  - `cine.js`: Handler for `cinevid.st` (Cinevid live sports events & schedule).
+- `utils/helpers.js`: Shared formatting, icon mappings, timezone conversions, and config merging.
+- `generate.js`: Unified orchestrator combining all provider modules into single/combined playlists.
+- `routes.js`: Centralized route-to-generator mappings used across Bun server and Cloudflare Pages.
+- `server.js`: Native Bun HTTP server with in-memory TTL caching and on-demand playlist generation.
+- `functions/[[route]].js`: Cloudflare Pages Edge functions with edge caching.
+- `config.js`: Centralized configuration.
+- `test.js`: End-to-end integration test suite.
 
-## Setup & Installation
+## Setup & Configuration
 
-1. **Clone the repository**:
+1. **Install Bun** (if not installed):
    ```bash
-   git clone https://github.com/yourusername/iptv_rb.git
-   cd iptv_rb
+   curl -fsSL https://bun.sh/install | bash
    ```
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Configure Environment Variables**:
-   Copy the example environment file and fill in your details:
+2. **Configure Environment Variables**:
+   Copy `.env.example` to `.env`:
    ```bash
    cp .env.example .env
    ```
-   Edit `.env` and configure:
-   - `PORT`: Server port (default: 3030)
-   - `VPS_URL`: URL to your playlist source
-   - `API_BASE_URL`: The sports API base URL
-   - `REFERER` / `ORIGIN`: Headers required by the stream provider
+   Key variables in `.env`:
+   - `PORT`: Server port (default: `3030`)
+   - `STREAM_API_URL`: `https://strmfree.st/streams`
+   - `SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true`
+   - `STRM_SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true`
+   - `CINE_SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true`
+   - `EMBED_BASE_URL`: `https://strmfree.st/embed`
+   - `REFERER`: `https://strmfree.st/`
+   - `ORIGIN`: `https://strmfree.st`
+   - `CHECK_INTERVAL`: Update interval in ms (default: `300000` = 5 mins)
 
-## Running the Project
+## Running the Application
 
-### Development
+### Test the Integration
 ```bash
-npm start
+bun test.js
+```
+
+### Run Locally with Bun
+```bash
+bun start # or bun server.js
 ```
 
 ### Docker (Recommended)
-You can run the entire stack using Docker and Docker Compose:
-
-1. **Build and start**:
-   ```bash
-   docker-compose up -d --build
-   ```
-
-2. **View logs**:
-   ```bash
-   docker-compose logs -f
-   ```
-
-### Production (using PM2)
-The project includes an `ecosystem.config.js` for PM2:
 ```bash
-pm2 start ecosystem.config.js
+docker-compose up -d --build
+docker-compose logs -f
 ```
-This will launch both the `iptv_server` (in cluster mode) and the `iptv_worker`.
 
-## Deployment
+## Client Playback & Endpoints
 
-### Nginx Configuration
-An example Nginx configuration with SSL and streaming optimizations is provided in `nginx.conf.example`. It includes:
-- Automatic HTTP to HTTPS redirection.
-- SSL optimization.
-- Streaming-specific proxy settings (buffering off, long timeouts).
+Add the playlist URL to your favorite IPTV player (TiviMate, VLC, OTT Navigator):
 
-### Vercel
-The project is structured to support Vercel deployment for the playlist proxy function located in the `api/` directory.
+- **STRM Provider** (`strmfree.st`):
+  ```text
+  https://iptv-140.pages.dev/strm
+  ```
+  *(or `/stream`)*
+
+- **PPV Provider** (`api.ppv.st`):
+  ```text
+  https://iptv-140.pages.dev/ppv
+  ```
+
+- **GK Provider** (`api.reedstreams.link`):
+  ```text
+  https://iptv-140.pages.dev/gk
+  ```
+
+- **TimStreams Live** (`tim-streams.com/api/live-upcoming`):
+  ```text
+  https://iptv-140.pages.dev/tim
+  ```
+
+- **TimStreams 24/7 Channels** (219 Channels, Sports, Entertainment, Movies, News):
+  ```text
+  https://iptv-140.pages.dev/channel
+  ```
+  *(or `/channels`)*
+
+- **SportsBite 24/7 Channels** (830+ Channels, 47 Countries, Sports, Movies, News):
+  ```text
+  https://iptv-140.pages.dev/channel2
+  ```
+
+- **VidCDN 24/7 Channels** (980+ Channels, 48+ Countries, Sports, Movies, News):
+  ```text
+  https://iptv-140.pages.dev/channel3
+  ```
+  *(or `/vidcdn`)*
+
+- **PitSport Provider** (`pitsport.st/api/v1/home`):
+  ```text
+  https://iptv-140.pages.dev/pit
+  ```
+
+- **Cinevid Provider** (`cinevid.st/api/public/events`):
+  ```text
+  https://iptv-140.pages.dev/cine
+  ```
+  *(or `/cinevid`)*
+
+- **Combined Playlist** (All providers):
+  ```text
+  https://iptv-140.pages.dev/all
+  ```
 
 ## License
 MIT

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "bun server.js",
     "generate": "bun generate.js",
-    "worker": "bun worker.js"
+    "test": "bun test.js"
   },
   "dependencies": {
     "crypto-js": "^4.2.0",
