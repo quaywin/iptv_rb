@@ -1,12 +1,27 @@
-const { formatTime, getSportIcon, getLeagueLogo, mergeConfig } = require("../utils/helpers");
+const {
+  formatTime,
+  getSportIcon,
+  getLeagueLogo,
+  mergeConfig,
+  fetchWithFallback,
+} = require("../utils/helpers");
 
 /**
- * Fetch streams from api.ppv.st API
+ * Fetch streams from PPV API with multi-proxy & direct fallback
  */
 async function fetchPpvStreamList(cfg) {
   try {
-    console.log(`Fetching PPV streams from: ${cfg.ppvApiUrl}`);
-    const response = await fetch(cfg.ppvApiUrl, {
+    const candidates = [
+      cfg.ppvApiUrl,
+      "https://api.ppv.st/api/streams",
+      "https://api.ppv.to/api/streams",
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://api.ppv.st/api/streams"),
+    ].filter(Boolean);
+
+    console.log(`Fetching PPV streams (primary: ${cfg.ppvApiUrl}, candidates: ${candidates.length})`);
+
+    const data = await fetchWithFallback(candidates, {
+      timeoutMs: cfg.timeout || 7000,
       headers: {
         "User-Agent": cfg.userAgent,
         "Origin": "https://iptv-140.pages.dev",
@@ -15,12 +30,6 @@ async function fetchPpvStreamList(cfg) {
         "Sec-Fetch-Site": "cross-site",
       },
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     const categories = data.streams || [];
     const allStreams = [];
 

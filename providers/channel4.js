@@ -1,4 +1,8 @@
-const { mergeConfig } = require("../utils/helpers");
+const {
+  mergeConfig,
+  fetchWithFallback,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 
 const COUNTRY_MAP = {
   US: { country: "United States", flag: "🇺🇸", order: 1 },
@@ -93,33 +97,17 @@ let inFlightFetch = null;
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 // Multi-domain redundancy for Matchora
-const MATColorA_HOSTS = ["https://matchora.to", "https://matchora.pro", "https://es.matchora.pro"];
+const MATCHORA_HOSTS = PROVIDER_MIRRORS.matchora;
 
 async function fetchMatchoraJson(endpoint, userAgent, timeoutMs = 8000) {
-  let lastError = null;
-  for (const host of MATColorA_HOSTS) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      const url = `${host}${endpoint}`;
-
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent": userAgent,
-          "Accept": "application/json",
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (e) {
-      lastError = e;
-    }
-  }
-  throw new Error(`All Matchora hosts failed for ${endpoint}: ${lastError ? lastError.message : "HTTP error"}`);
+  const candidateUrls = MATCHORA_HOSTS.map(h => `${h}${endpoint}`);
+  return await fetchWithFallback(candidateUrls, {
+    timeoutMs,
+    headers: {
+      "User-Agent": userAgent,
+      "Accept": "application/json",
+    },
+  });
 }
 
 function decodeHtmlEntities(str) {

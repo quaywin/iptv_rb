@@ -311,6 +311,197 @@ function getLeagueLogo(leagueName, fallbackLogo = "") {
   return fallbackLogo;
 }
 
+// Default mirror hosts for popular stream services
+const PROVIDER_MIRRORS = {
+  strm: ["https://strmfree.st", "https://strmfree.to", "https://strmfree.is", "https://strmfree.ws", "https://streamfree.to"],
+  cine: ["https://cinevid.st", "https://cinevid.to", "https://cinevid.is", "https://cinevid.ws"],
+  dam: ["https://ondemand.st", "https://ondemand.to", "https://ondemand.is", "https://damitv.st", "https://damitv.to"],
+  tim: ["https://tim-streams.com", "https://tim-streams.to", "https://tim-streams.net", "https://tim-streams.is"],
+  gk: ["https://api.reedstreams.link", "https://reedstreams.link", "https://api.reedstreams.to", "https://api.reedstreams.is"],
+  pit: ["https://pitsport.st", "https://pitsport.to", "https://pitsport.is", "https://pitsport.ws"],
+  sportsbite: ["https://sportsbite.org", "https://sportsbite.to", "https://sportsbite.st", "https://sportsbite.net"],
+  vidcdn: ["https://vidcdn.vip", "https://vidcdn.st", "https://vidcdn.to", "https://vidcdn.is"],
+  matchora: ["https://matchora.to", "https://matchora.pro", "https://es.matchora.pro", "https://matchora.net"],
+};
+
+/**
+ * In-memory host health registry & circuit breaker
+ * hostOrigin -> {
+ *   failureCount: number,
+ *   lastFailureTime: number,
+ *   lastSuccessTime: number,
+ *   latency: number, // ms
+ *   cooldownUntil: number // timestamp
+ * }
+ */
+const hostHealthRegistry = new Map();
+
+function getHostOrigin(urlStr) {
+  try {
+    return new URL(urlStr).origin.toLowerCase();
+  } catch (e) {
+    return urlStr;
+  }
+}
+
+function getHostStats(origin) {
+  if (!hostHealthRegistry.has(origin)) {
+    hostHealthRegistry.set(origin, {
+      failureCount: 0,
+      lastFailureTime: 0,
+      lastSuccessTime: 0,
+      latency: 0,
+      cooldownUntil: 0,
+    });
+  }
+  return hostHealthRegistry.get(origin);
+}
+
+function recordHostSuccess(urlStr, latencyMs) {
+  const origin = getHostOrigin(urlStr);
+  const stats = getHostStats(origin);
+  stats.failureCount = 0;
+  stats.lastSuccessTime = Date.now();
+  stats.latency = latencyMs;
+  stats.cooldownUntil = 0;
+}
+
+function recordHostFailure(urlStr, error) {
+  const origin = getHostOrigin(urlStr);
+  const stats = getHostStats(origin);
+  const now = Date.now();
+  stats.failureCount += 1;
+  stats.lastFailureTime = now;
+
+  // Progressive cooldown:
+  // 1 failure: 2 minutes (120s)
+  // 2 failures: 10 minutes (600s)
+  // >= 3 failures: 30 minutes (1800s)
+  let cooldownSec = 120;
+  if (stats.failureCount === 2) cooldownSec = 600;
+  else if (stats.failureCount >= 3) cooldownSec = 1800;
+
+  stats.cooldownUntil = now + cooldownSec * 1000;
+  console.warn(`[CircuitBreaker] Host ${origin} penalised (failures: ${stats.failureCount}). Cooldown: ${cooldownSec}s.`);
+}
+
+/**
+ * Rank candidate URLs dynamically based on host health, failure history, and latency
+ */
+function rankCandidateUrls(urls) {
+  const now = Date.now();
+
+  return [...urls].sort((urlA, urlB) => {
+    const originA = getHostOrigin(urlA);
+    const originB = getHostOrigin(urlB);
+
+    if (originA === originB) return 0;
+
+    const statsA = getHostStats(originA);
+    const statsB = getHostStats(originB);
+
+    const isCooldownA = statsA.cooldownUntil > now;
+    const isCooldownB = statsB.cooldownUntil > now;
+
+    // 1. Host không trong cooldown luôn ưu tiên hơn host đang bị cooldown
+    if (!isCooldownA && isCooldownB) return -1;
+    if (isCooldownA && !isCooldownB) return 1;
+
+    // Nếu cả 2 đều đang cooldown, host nào sắp hết hạn cooldown hơn thì thử trước
+    if (isCooldownA && isCooldownB) {
+      return statsA.cooldownUntil - statsB.cooldownUntil;
+    }
+
+    // 2. Cả 2 đều khỏe mạnh:
+    // Host đã từng phản hồi thành công (lastSuccessTime > 0) ưu tiên hơn host chưa từng biết
+    const hasSuccessA = statsA.lastSuccessTime > 0 && statsA.failureCount === 0;
+    const hasSuccessB = statsB.lastSuccessTime > 0 && statsB.failureCount === 0;
+
+    if (hasSuccessA && !hasSuccessB) return -1;
+    if (!hasSuccessA && hasSuccessB) return 1;
+
+    // 3. Nếu cả 2 đều đã thành công: ưu tiên host có độ trễ (latency) thấp hơn
+    if (hasSuccessA && hasSuccessB && statsA.latency && statsB.latency) {
+      return statsA.latency - statsB.latency;
+    }
+
+    // Giữ nguyên thứ tự ban đầu nếu ngang bằng
+    return 0;
+  });
+}
+
+/**
+ * Generate candidate URLs by replacing the host of primaryUrl with fallback hosts
+ */
+function buildCandidateUrls(primaryUrl, alternateHosts = []) {
+  if (!primaryUrl) return [];
+  const candidates = [primaryUrl];
+  try {
+    const parsed = new URL(primaryUrl);
+    const pathAndQuery = parsed.pathname + parsed.search;
+    for (const host of alternateHosts) {
+      try {
+        const altUrl = new URL(pathAndQuery, host).toString();
+        if (!candidates.includes(altUrl)) {
+          candidates.push(altUrl);
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
+  return candidates;
+}
+
+/**
+ * Robust fetch with adaptive ranking, circuit breaker and multi-mirror fallback
+ */
+async function fetchWithFallback(urls, options = {}) {
+  const rawList = Array.isArray(urls) ? urls.filter(Boolean) : [urls].filter(Boolean);
+  if (!rawList.length) {
+    throw new Error("fetchWithFallback: No valid URLs provided");
+  }
+
+  // Tự động sắp xếp candidate URLs theo độ khỏe, cooldown và phản hồi thực tế
+  const urlList = rankCandidateUrls(rawList);
+
+  const timeoutMs = options.timeoutMs || options.timeout || 6000;
+  const responseType = options.responseType || "json";
+  const fetchHeaders = options.headers || {};
+  let lastError = null;
+
+  for (const url of urlList) {
+    let timer = null;
+    const startTime = Date.now();
+    try {
+      const controller = new AbortController();
+      timer = setTimeout(() => controller.abort(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
+
+      const res = await fetch(url, {
+        method: options.method || "GET",
+        headers: fetchHeaders,
+        signal: controller.signal,
+        redirect: options.redirect || "follow",
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+
+      const data = responseType === "json" ? await res.json() : await res.text();
+      const latencyMs = Date.now() - startTime;
+      recordHostSuccess(url, latencyMs);
+      return data;
+    } catch (err) {
+      lastError = err;
+      recordHostFailure(url, err);
+      console.warn(`[fetchWithFallback] Failed for ${url}: ${err.message}. Trying next mirror...`);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  throw new Error(`All candidate URLs failed (${urlList.length} tried). Last error: ${lastError ? lastError.message : "Unknown error"}`);
+}
+
 function mergeConfig(customConfig = {}) {
   const cleanCustom = {};
   for (const [k, v] of Object.entries(customConfig)) {
@@ -330,5 +521,11 @@ module.exports = {
   capitalize,
   LEAGUE_LOGOS,
   getLeagueLogo,
+  PROVIDER_MIRRORS,
+  buildCandidateUrls,
+  fetchWithFallback,
+  rankCandidateUrls,
+  getHostStats,
+  hostHealthRegistry,
   mergeConfig,
 };

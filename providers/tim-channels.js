@@ -1,4 +1,9 @@
-const { mergeConfig } = require("../utils/helpers");
+const {
+  mergeConfig,
+  fetchWithFallback,
+  buildCandidateUrls,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 const { getTimChannelEpgId, getTimChannelLogo } = require("../utils/epg-tim");
 
 // Helper to detect country and flag for 24/7 channels
@@ -33,22 +38,20 @@ function getChannelCountry(ch) {
 }
 
 /**
- * Fetch 24/7 channels from tim-streams.com API
+ * Fetch 24/7 channels from tim-streams API with multi-mirror fallback
  */
 async function fetchTimChannelsList(cfg) {
   try {
-    console.log(`Fetching TimChannels from: ${cfg.timChannelsUrl}`);
-    const response = await fetch(cfg.timChannelsUrl, {
+    const urls = buildCandidateUrls(cfg.timChannelsUrl, PROVIDER_MIRRORS.tim);
+    console.log(`Fetching TimChannels (primary: ${cfg.timChannelsUrl}, candidates: ${urls.length})`);
+
+    const data = await fetchWithFallback(urls, {
+      timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     const channels = data.channels || [];
     const validChannels = [];
 

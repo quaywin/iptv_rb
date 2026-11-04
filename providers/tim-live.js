@@ -1,22 +1,29 @@
-const { formatTime, getSportIcon, parseTimTime, getLeagueLogo, mergeConfig } = require("../utils/helpers");
+const {
+  formatTime,
+  getSportIcon,
+  parseTimTime,
+  getLeagueLogo,
+  mergeConfig,
+  fetchWithFallback,
+  buildCandidateUrls,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 
 /**
- * Fetch live and upcoming events from tim-streams.com API
+ * Fetch live and upcoming events from tim-streams API with multi-mirror fallback
  */
 async function fetchTimStreamList(cfg) {
   try {
-    console.log(`Fetching Tim Live events from: ${cfg.timApiUrl}`);
-    const response = await fetch(cfg.timApiUrl, {
+    const urls = buildCandidateUrls(cfg.timApiUrl, PROVIDER_MIRRORS.tim);
+    console.log(`Fetching Tim Live events (primary: ${cfg.timApiUrl}, candidates: ${urls.length})`);
+
+    const data = await fetchWithFallback(urls, {
+      timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     const rawEvents = data.events || [];
     const genres = data.genres || [];
     const genreMap = {};
@@ -41,14 +48,12 @@ async function resolveTimEventStream(event, cfg) {
   if (!event.url) return null;
 
   try {
-    const watchUrl = `${cfg.timWatchBaseUrl}/${event.url}`;
-    const res = await fetch(watchUrl, {
+    const watchUrls = buildCandidateUrls(`${cfg.timWatchBaseUrl}/${event.url}`, PROVIDER_MIRRORS.tim);
+    const json = await fetchWithFallback(watchUrls, {
+      timeoutMs: 4000,
       headers: { "User-Agent": cfg.userAgent },
     });
-    if (res.ok) {
-      const json = await res.json();
-      return json.item?.streams?.[0]?.url || null;
-    }
+    return json.item?.streams?.[0]?.url || null;
   } catch (e) {
     console.warn(`Could not resolve stream for Tim event ${event.url}:`, e.message);
   }

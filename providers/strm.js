@@ -1,24 +1,30 @@
-const { formatTime, getSportIcon, capitalize, getLeagueLogo, mergeConfig } = require("../utils/helpers");
+const {
+  formatTime,
+  getSportIcon,
+  capitalize,
+  getLeagueLogo,
+  mergeConfig,
+  fetchWithFallback,
+  buildCandidateUrls,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 
 /**
- * Fetch streams from strmfree.st API
+ * Fetch streams from strmfree API with multi-mirror fallback
  */
 async function fetchStrmStreamList(cfg) {
   try {
-    console.log(`Fetching STRM streams from: ${cfg.streamApiUrl}`);
-    const response = await fetch(cfg.streamApiUrl, {
+    const urls = buildCandidateUrls(cfg.streamApiUrl, PROVIDER_MIRRORS.strm);
+    console.log(`Fetching STRM streams (primary: ${cfg.streamApiUrl}, candidates: ${urls.length})`);
+
+    const data = await fetchWithFallback(urls, {
+      timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
         "Referer": cfg.referer,
         "Origin": cfg.origin,
       },
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     const categories = data.streams || {};
 
     const allStreams = [];

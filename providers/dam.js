@@ -1,13 +1,25 @@
-const { formatTime, getSportIcon, capitalize, getLeagueLogo, mergeConfig } = require("../utils/helpers");
+const {
+  formatTime,
+  getSportIcon,
+  capitalize,
+  getLeagueLogo,
+  mergeConfig,
+  fetchWithFallback,
+  buildCandidateUrls,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 
 /**
- * Fetch streams from ondemand.st (DAMITV) API
+ * Fetch streams from ondemand.st (DAMITV) API with multi-mirror fallback
  */
 async function fetchDamStreamList(cfg) {
   try {
     const url = cfg.damApiUrl || "https://ondemand.st/papi/api/streams";
-    console.log(`Fetching DAM streams from: ${url}`);
-    const response = await fetch(url, {
+    const urls = buildCandidateUrls(url, PROVIDER_MIRRORS.dam);
+    console.log(`Fetching DAM streams (primary: ${url}, candidates: ${urls.length})`);
+
+    const data = await fetchWithFallback(urls, {
+      timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
         "Referer": "https://ondemand.st/",
@@ -15,11 +27,6 @@ async function fetchDamStreamList(cfg) {
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     const categories = data.streams || [];
     const allStreams = [];
 

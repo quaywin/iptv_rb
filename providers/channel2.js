@@ -1,4 +1,9 @@
-const { mergeConfig } = require("../utils/helpers");
+const {
+  mergeConfig,
+  fetchWithFallback,
+  buildCandidateUrls,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 const { getSportsbiteChannelEpgId, getSportsbiteChannelLogo } = require("../utils/epg-channel2");
 
 const COUNTRY_MAP = {
@@ -75,23 +80,21 @@ function getSportsbiteChannelCountry(ch) {
 }
 
 /**
- * Fetch 24/7 channels from SportsBite API
+ * Fetch 24/7 channels from SportsBite API with multi-mirror fallback
  */
 async function fetchSportsbiteChannels(cfg) {
   try {
     const apiUrl = cfg.sportsbiteChannelsUrl || "https://sportsbite.org/api/forestgump/channels";
-    console.log(`Fetching SportsBite channels from: ${apiUrl}`);
-    const response = await fetch(apiUrl, {
+    const urls = buildCandidateUrls(apiUrl, PROVIDER_MIRRORS.sportsbite);
+    console.log(`Fetching SportsBite channels (primary: ${apiUrl}, candidates: ${urls.length})`);
+
+    const data = await fetchWithFallback(urls, {
+      timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     const channels = data.channels || [];
     const validChannels = [];
 

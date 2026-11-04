@@ -1,4 +1,9 @@
-const { mergeConfig } = require("../utils/helpers");
+const {
+  mergeConfig,
+  fetchWithFallback,
+  buildCandidateUrls,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 
 const COUNTRY_MAP = {
   usa: { country: "United States", flag: "🇺🇸", order: 1 },
@@ -79,23 +84,21 @@ function getVidcdnChannelCountry(ch) {
 }
 
 /**
- * Fetch 24/7 channels from vidcdn.vip API
+ * Fetch 24/7 channels from vidcdn.vip API with multi-mirror fallback
  */
 async function fetchVidcdnChannelsList(cfg) {
   try {
     const apiUrl = cfg.vidcdnChannelsUrl || "https://vidcdn.vip/api/channels";
-    console.log(`Fetching VidCDN channels from: ${apiUrl}`);
-    const response = await fetch(apiUrl, {
+    const urls = buildCandidateUrls(apiUrl, PROVIDER_MIRRORS.vidcdn);
+    console.log(`Fetching VidCDN channels (primary: ${apiUrl}, candidates: ${urls.length})`);
+
+    const data = await fetchWithFallback(urls, {
+      timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     const channels = Array.isArray(data) ? data : (data.channels || []);
     const validChannels = [];
 

@@ -1,23 +1,31 @@
-const { formatTime, getSportIcon, capitalize, getLeagueLogo, mergeConfig, parseCineTime } = require("../utils/helpers");
+const {
+  formatTime,
+  getSportIcon,
+  capitalize,
+  getLeagueLogo,
+  mergeConfig,
+  parseCineTime,
+  fetchWithFallback,
+  buildCandidateUrls,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 
 /**
- * Fetch live and upcoming events from Cinevid API
+ * Fetch live and upcoming events from Cinevid API with multi-mirror fallback
  */
 async function fetchCineStreamList(cfg) {
   try {
     const cineUrl = cfg.cineApiUrl || "https://cinevid.st/api/public/events";
-    console.log(`Fetching Cinevid streams from: ${cineUrl}`);
-    const response = await fetch(cineUrl, {
+    const urls = buildCandidateUrls(cineUrl, PROVIDER_MIRRORS.cine);
+    console.log(`Fetching Cinevid streams (primary: ${cineUrl}, candidates: ${urls.length})`);
+
+    const json = await fetchWithFallback(urls, {
+      timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const json = await response.json();
     const rawEvents = Array.isArray(json) ? json : (json.events || []);
 
     const seenIds = new Set();

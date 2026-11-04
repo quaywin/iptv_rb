@@ -1,23 +1,31 @@
-const { formatTime, getSportIcon, parseTimTime, capitalize, getLeagueLogo, mergeConfig } = require("../utils/helpers");
+const {
+  formatTime,
+  getSportIcon,
+  parseTimTime,
+  capitalize,
+  getLeagueLogo,
+  mergeConfig,
+  fetchWithFallback,
+  buildCandidateUrls,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 
 /**
- * Fetch matches from reedstreams API (GK)
+ * Fetch matches from reedstreams API (GK) with multi-mirror fallback
  */
 async function fetchGkStreamList(cfg) {
   try {
     const gkUrl = cfg.gkApiUrl || "https://api.reedstreams.link/api/matches/all";
-    console.log(`Fetching GK streams from: ${gkUrl}`);
-    const response = await fetch(gkUrl, {
+    const urls = buildCandidateUrls(gkUrl, PROVIDER_MIRRORS.gk);
+    console.log(`Fetching GK streams (primary: ${gkUrl}, candidates: ${urls.length})`);
+
+    const matches = await fetchWithFallback(urls, {
+      timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const matches = await response.json();
     if (!Array.isArray(matches)) {
       console.log("GK response is not an array.");
       return [];

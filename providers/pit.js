@@ -1,23 +1,30 @@
-const { formatTime, getSportIcon, capitalize, getLeagueLogo, mergeConfig } = require("../utils/helpers");
+const {
+  formatTime,
+  getSportIcon,
+  capitalize,
+  getLeagueLogo,
+  mergeConfig,
+  fetchWithFallback,
+  buildCandidateUrls,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 
 /**
- * Fetch live and upcoming programs from PitSport home API
+ * Fetch live and upcoming programs from PitSport home API with multi-mirror fallback
  */
 async function fetchPitStreamList(cfg) {
   try {
     const pitUrl = cfg.pitApiUrl || "https://pitsport.st/api/v1/home";
-    console.log(`Fetching PitSport streams from: ${pitUrl}`);
-    const response = await fetch(pitUrl, {
+    const urls = buildCandidateUrls(pitUrl, PROVIDER_MIRRORS.pit);
+    console.log(`Fetching PitSport streams (primary: ${pitUrl}, candidates: ${urls.length})`);
+
+    const json = await fetchWithFallback(urls, {
+      timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const json = await response.json();
     const data = json.data || {};
     const rawList = [...(data.live || []), ...(data.upcoming || [])];
 

@@ -1,11 +1,17 @@
-const { formatTime, getLeagueLogo, mergeConfig } = require("../utils/helpers");
+const {
+  formatTime,
+  getLeagueLogo,
+  mergeConfig,
+  fetchWithFallback,
+  PROVIDER_MIRRORS,
+} = require("../utils/helpers");
 
 // In-memory cache for event detail pages when using fallback HTML scraping
 const eventDetailCache = new Map();
 const DETAIL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Hosts for Matchora API (with multi-domain redundancy)
-const MATColorA_HOSTS = ["https://matchora.to", "https://matchora.pro", "https://es.matchora.pro"];
+const MATCHORA_HOSTS = PROVIDER_MIRRORS.matchora;
 
 /**
  * Return precise sport emoji based on sportSlug and league name
@@ -57,30 +63,14 @@ function getExactSportIcon(sportSlug, leagueName) {
  * Fetch JSON with multi-host fallback (matchora.to -> matchora.pro -> es.matchora.pro)
  */
 async function fetchMatchoraJson(endpoint, userAgent, timeoutMs = 6000) {
-  let lastError = null;
-  for (const host of MATColorA_HOSTS) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      const url = `${host}${endpoint}`;
-
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent": userAgent,
-          "Accept": "application/json",
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (e) {
-      lastError = e;
-    }
-  }
-  throw new Error(`All Matchora hosts failed for ${endpoint}: ${lastError ? lastError.message : "HTTP error"}`);
+  const candidateUrls = MATCHORA_HOSTS.map(h => `${h}${endpoint}`);
+  return await fetchWithFallback(candidateUrls, {
+    timeoutMs,
+    headers: {
+      "User-Agent": userAgent,
+      "Accept": "application/json",
+    },
+  });
 }
 
 /**
@@ -335,34 +325,75 @@ async function fetchSports247EventsFromHtml(cfg) {
 }
 
 /**
+ * Normalize channel name to identify identical broadcast channels across feeds
+ * e.g. "BEIN SPORTS 3" and "beIN Sport 03" -> "beinsport3"
+ */
+function normalizeChannelKey(name = "") {
+  if (!name) return "";
+  return name
+    .toLowerCase()
+    .replace(/\bsports\b/g, "sport")
+    .replace(/\b0+(\d+)\b/g, "$1")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+/**
+ * Calculate numeric tier for video resolution:
+ * 3 = 4K / UHD / Full HD (1080p)
+ * 2 = HD (720p)
+ * 1 = Default / Unspecified web stream
+ * 0 = SD (480p / 360p)
+ */
+function getQualityRank(qualityStr = "") {
+  const q = (qualityStr || "").toUpperCase();
+  if (q.includes("4K") || q.includes("UHD") || q.includes("FHD") || q.includes("1080")) {
+    return 3;
+  }
+  if (q.includes("HD") || q.includes("720")) {
+    return 2;
+  }
+  if (q.includes("SD") || q.includes("480") || q.includes("360")) {
+    return 0;
+  }
+  return 1;
+}
+
+/**
  * Smart Channel Ranking Score:
- * Evaluates live stream health, viewer popularity, video quality, language, and broadcaster reputation.
+ * Strictly prioritizes Full HD > HD > Web/Default > SD,
+ * while factoring in playback health, viewer popularity, language, and broadcaster reputation.
  */
 function scoreChannel(ch, isLive = false) {
   if (ch.dead) return -9999;
   let score = 0;
 
-  // 1. Live playback confirmation (+500 pts)
-  if (ch.playing) score += 500;
+  // 1. Resolution / Quality weighting (Primary tiering factor)
+  // Ensures FHD always dominates HD, and HD always dominates SD
+  const qRank = getQualityRank(ch.quality);
+  if (qRank === 3) score += 3000;       // Full HD / 4K / 1080p
+  else if (qRank === 2) score += 1800;  // HD / 720p
+  else if (qRank === 1) score += 900;   // Default / Web stream
+  else if (qRank === 0) score += 0;     // SD (heavily deprioritized)
 
-  // 2. Viewer count / popularity (real active viewers, capped at 1000 pts)
+  // 2. Live playback confirmation
+  // Only heavily prioritize when match is live; upcoming 24/7 channels running in background shouldn't overpower event feeds
+  if (ch.playing) {
+    score += isLive ? 400 : 50;
+  }
+
+  // 3. Viewer count / popularity (real active viewers, capped at 150 pts so quality tier dominates)
   const watching = typeof ch.watching === "number" ? ch.watching : (parseInt(ch.watching, 10) || 0);
-  score += Math.min(watching, 1000);
-
-  // 3. Resolution / Quality weighting
-  const quality = (ch.quality || "").toUpperCase();
-  if (quality.includes("FHD") || quality.includes("1080")) score += 300;
-  else if (quality.includes("HD") || quality.includes("720")) score += 200;
-  else if (quality.includes("SD")) score += 50;
+  score += Math.min(watching * 2, 150);
 
   // 4. Audio / Language prioritization
   const lang = (ch.lang || "").toLowerCase();
   if (lang.includes("en") || lang.includes("english")) {
-    score += 400;
+    score += 300;
   } else if (["es", "spanish", "fr", "french", "pt", "portuguese", "de", "german", "it", "italian", "ar", "arabic"].some(l => lang.includes(l))) {
-    score += 150;
+    score += 120;
   } else if (lang) {
-    score += 50;
+    score += 40;
   }
 
   // 5. Popular Broadcasters bonus (+150 pts)
@@ -430,10 +461,33 @@ async function generateSports247Playlist(customConfig = {}) {
     // Smart channel ranking: sort highest quality/health feeds first
     let channels = [...evt.channels];
     if (channels.length > 1) {
+      // Sort feeds so Full HD > HD > Web/Default > SD
       channels.sort((a, b) => scoreChannel(b, evt.isLive) - scoreChannel(a, evt.isLive));
-      if (maxChannels > 0) {
-        channels = channels.slice(0, maxChannels);
+
+      // For the same channel, prioritize and pick the best quality/score feed (Full HD > HD > SD)
+      const deduplicated = [];
+      const seenKeys = new Set();
+      for (const ch of channels) {
+        const key = normalizeChannelKey(ch.name);
+        const isGeneric = !key || key.startsWith("server") || key.startsWith("stream");
+        if (!isGeneric) {
+          if (seenKeys.has(key)) continue;
+          seenKeys.add(key);
+        }
+        deduplicated.push(ch);
       }
+
+      // If deduplication left fewer channels than maxChannels, fill with remaining alternate feeds
+      if (maxChannels > 0 && deduplicated.length < maxChannels) {
+        for (const ch of channels) {
+          if (!deduplicated.includes(ch)) {
+            deduplicated.push(ch);
+            if (deduplicated.length >= maxChannels) break;
+          }
+        }
+      }
+
+      channels = maxChannels > 0 ? deduplicated.slice(0, maxChannels) : deduplicated;
     }
 
     for (let i = 0; i < channels.length; i++) {
@@ -475,4 +529,6 @@ module.exports = {
   generateSports247Playlist,
   getExactSportIcon,
   scoreChannel,
+  getQualityRank,
+  normalizeChannelKey,
 };
