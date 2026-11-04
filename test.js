@@ -8,6 +8,9 @@ const {
   generateGkPlaylist,
   generatePitPlaylist,
   generateCinePlaylist,
+  generateDamPlaylist,
+  generateSports247Playlist,
+  generateChannel4Playlist,
   generateCombinedPlaylist,
 } = require("./generate");
 const config = require("./config");
@@ -102,6 +105,27 @@ async function runTest() {
     console.log(`✅ Cinevid playlist generated: ${cineCount} events.`);
     fs.writeFileSync("test-cine.m3u", cineContent);
 
+    // 8c. DAM Provider (ondemand.st)
+    console.log("\n=== Step 8c: Testing DAM Provider (generateDamPlaylist) ===");
+    const damContent = await generateDamPlaylist();
+    const damCount = (damContent.match(/#EXTINF/g) || []).length;
+    console.log(`✅ DAM /dam playlist generated: ${damCount} streams.`);
+    fs.writeFileSync("test-dam.m3u", damContent);
+
+    // 8d. Sports247 Provider (en.sports247.ru /247)
+    console.log("\n=== Step 8d: Testing Sports247 Provider (generateSports247Playlist) ===");
+    const s247Content = await generateSports247Playlist();
+    const s247Count = (s247Content.match(/#EXTINF/g) || []).length;
+    console.log(`✅ Sports247 /247 playlist generated: ${s247Count} streams.`);
+    fs.writeFileSync("test-247.m3u", s247Content);
+
+    // 8e. Channel4: Sports247 24/7 Channels (/channel4)
+    console.log("\n=== Step 8e: Testing Sports247 Channels (generateChannel4Playlist) ===");
+    const channel4Content = await generateChannel4Playlist();
+    const channel4Count = (channel4Content.match(/#EXTINF/g) || []).length;
+    console.log(`✅ Sports247 /channel4 playlist generated: ${channel4Count} channels.`);
+    fs.writeFileSync("test-channel4.m3u", channel4Content);
+
     // 9. Combined Provider
     console.log("\n=== Step 9: Testing Combined Provider (generateCombinedPlaylist) ===");
     const allContent = await generateCombinedPlaylist();
@@ -131,6 +155,12 @@ async function runTest() {
 
     const channelSample = timChannelsContent.split("\n").find(l => l.startsWith("http://") || l.startsWith("https://"));
     if (channelSample) await testScraper(channelSample, "TimChannels");
+
+    const damSample = damContent.split("\n").find(l => l.startsWith("http://") || l.startsWith("https://"));
+    if (damSample) await testScraper(damSample, "DAM");
+
+    const channel4Sample = channel4Content.split("\n").find(l => l.startsWith("http://") || l.startsWith("https://"));
+    if (channel4Sample) await testScraper(channel4Sample, "Channel4");
 
     console.log("\n🎉 All tests passed successfully!");
   } catch (error) {

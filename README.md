@@ -34,6 +34,9 @@ A Bun-based high-performance IPTV solution that automatically generates playlist
   - `gk.js`: Handler for `api.reedstreams.link` (ReedStreams / GK).
   - `pit.js`: Handler for `pitsport.st` (PitSport live & upcoming matches / racing).
   - `cine.js`: Handler for `cinevid.st` (Cinevid live sports events & schedule).
+  - `dam.js`: Handler for `ondemand.st` (DAMITV live sports & 24/7 channels).
+  - `sports247.js`: Handler for `en.sports247.ru` / Matchora API (Live sports events & multi-server matchora embeds).
+  - `channel4.js`: Handler for `en.sports247.ru/channels` / Matchora API (2,700+ 24/7 TV channels across 63 countries).
 - `utils/helpers.js`: Shared formatting, icon mappings, timezone conversions, and config merging.
 - `generate.js`: Unified orchestrator combining all provider modules into single/combined playlists.
 - `routes.js`: Centralized route-to-generator mappings used across Bun server and Cloudflare Pages.
@@ -60,6 +63,7 @@ A Bun-based high-performance IPTV solution that automatically generates playlist
    - `SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true`
    - `STRM_SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true`
    - `CINE_SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true`
+   - `DAM_SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true`
    - `EMBED_BASE_URL`: `https://strmfree.st/embed`
    - `REFERER`: `https://strmfree.st/`
    - `ORIGIN`: `https://strmfree.st`
@@ -135,6 +139,24 @@ Add the playlist URL to your favorite IPTV player (TiviMate, VLC, OTT Navigator)
   https://iptv-140.pages.dev/cine
   ```
   *(or `/cinevid`)*
+
+- **DAM Provider** (`ondemand.st/papi/api/streams`):
+  ```text
+  https://iptv-140.pages.dev/dam
+  ```
+  *(or `/dam.m3u`, `/ondemand`)*
+
+- **Sports247 Live Events** (`en.sports247.ru/events`):
+  ```text
+  https://iptv-140.pages.dev/247
+  ```
+  *(or `/247.m3u`, `/sports247`)*
+
+- **Sports247 24/7 Channels** (2,750+ Channels across 56 Countries):
+  ```text
+  https://iptv-140.pages.dev/channel4
+  ```
+  *(or `/channel4.m3u`, `/sports247-channels`)*
 
 - **Combined Playlist** (All providers):
   ```text

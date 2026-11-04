@@ -7,6 +7,9 @@ const { generateSportsbitePlaylist, fetchSportsbiteChannels } = require("./provi
 const { generatePitPlaylist, fetchPitStreamList } = require("./providers/pit");
 const { generateCinePlaylist, fetchCineStreamList } = require("./providers/cine");
 const { generateChannel3Playlist, fetchChannel3List, getVidcdnChannelCountry } = require("./providers/channel3");
+const { generateDamPlaylist, fetchDamStreamList, generateOndemandPlaylist } = require("./providers/dam");
+const { generateSports247Playlist, fetchSports247Events } = require("./providers/sports247");
+const { generateChannel4Playlist, fetchSports247Channels, getSports247ChannelCountry } = require("./providers/channel4");
 
 /**
  * Generate combined playlist from all providers
@@ -20,7 +23,7 @@ async function generateCombinedPlaylist(customConfig = {}) {
     return generator(customConfig);
   };
 
-  const [strm, ppv, timLive, timChannels, channel2, channel3, gk, pit, cine] = await Promise.all([
+  const [strm, ppv, timLive, timChannels, channel2, channel3, gk, pit, cine, dam, s247, channel4] = await Promise.all([
     getSub("strm.m3u", generateStrmPlaylist).catch(e => {
       console.error("STRM error in combined:", e.message);
       return "";
@@ -57,9 +60,21 @@ async function generateCombinedPlaylist(customConfig = {}) {
       console.error("Cine error in combined:", e.message);
       return "";
     }),
+    getSub("dam.m3u", generateDamPlaylist).catch(e => {
+      console.error("DAM error in combined:", e.message);
+      return "";
+    }),
+    getSub("247.m3u", generateSports247Playlist).catch(e => {
+      console.error("Sports247 error in combined:", e.message);
+      return "";
+    }),
+    getSub("channel4.m3u", generateChannel4Playlist).catch(e => {
+      console.error("Channel4 error in combined:", e.message);
+      return "";
+    }),
   ]);
 
-  const parts = [strm, ppv, timLive, timChannels, channel2, channel3, gk, pit, cine]
+  const parts = [strm, ppv, timLive, timChannels, channel2, channel3, gk, pit, cine, dam, s247, channel4]
     .map(p => (p || "").replace(/^#EXTM3U[^\n]*\n+/i, "").trim())
     .filter(Boolean);
 
@@ -79,9 +94,14 @@ module.exports = {
   generateChannel2Playlist: generateSportsbitePlaylist,
   generateChannel3Playlist,
   generateVidcdnPlaylist: generateChannel3Playlist,
+  generateChannel4Playlist,
+  generateSports247ChannelsPlaylist: generateChannel4Playlist,
   generateGkPlaylist,
   generatePitPlaylist,
   generateCinePlaylist,
+  generateDamPlaylist,
+  generateOndemandPlaylist,
+  generateSports247Playlist,
   generateCombinedPlaylist,
 
   // Stream Fetchers
@@ -91,11 +111,15 @@ module.exports = {
   fetchSportsbiteChannels,
   fetchVidcdnChannelsList: fetchChannel3List,
   fetchChannel3List,
+  fetchSports247Channels,
   fetchTimStreamList,
   resolveTimEventStream,
   fetchGkStreamList,
   fetchPitStreamList,
   fetchCineStreamList,
+  fetchDamStreamList,
+  fetchSports247Events,
   getChannelCountry,
   getVidcdnChannelCountry,
+  getSports247ChannelCountry,
 };

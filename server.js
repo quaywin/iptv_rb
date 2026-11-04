@@ -106,7 +106,6 @@ console.log(`- GK:      http://localhost:${server.port}/gk`);
 console.log(`- TIM:     http://localhost:${server.port}/tim`);
 console.log(`- CHANNEL: http://localhost:${server.port}/channel`);
 console.log(`- CHANNEL2:http://localhost:${server.port}/channel2`);
+console.log(`- DAM:     http://localhost:${server.port}/dam`);
 console.log(`- PIT:     http://localhost:${server.port}/pit`);
 console.log(`- ALL:     http://localhost:${server.port}/all`);
-
-module.exports = server;

@@ -34,10 +34,16 @@ export async function onRequest(context) {
       vidcdnChannelsUrl: env.VIDCDN_CHANNELS_URL,
       cineEmbedChannelBaseUrl: env.CINE_EMBED_CHANNEL_BASE_URL,
       timWatchBaseUrl: env.TIM_WATCH_BASE_URL,
+      damApiUrl: env.DAM_API_URL,
+      damScrapeServiceUrl: env.DAM_SCRAPE_SERVICE_URL,
+      sports247Url: env.SPORTS247_URL,
+      matchoraApiUrl: env.MATCHORA_API_URL,
+      sports247ScrapeServiceUrl: env.SPORTS247_SCRAPE_SERVICE_URL,
       embedBaseUrl: env.EMBED_BASE_URL,
       timezone: env.TIMEZONE,
       hoursBack: env.HOURS_BACK ? parseInt(env.HOURS_BACK, 10) : undefined,
       hoursAhead: env.HOURS_AHEAD ? parseInt(env.HOURS_AHEAD, 10) : undefined,
+      maxChannelsPerEvent: env.MAX_CHANNELS_PER_EVENT !== undefined ? parseInt(env.MAX_CHANNELS_PER_EVENT, 10) : undefined,
     });
 
     if (!playlist) {

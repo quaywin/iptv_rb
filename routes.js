@@ -5,13 +5,23 @@ const {
   generateTimChannelsPlaylist,
   generateSportsbitePlaylist,
   generateChannel3Playlist,
+  generateChannel4Playlist,
   generateGkPlaylist,
   generatePitPlaylist,
   generateCinePlaylist,
+  generateDamPlaylist,
+  generateSports247Playlist,
   generateCombinedPlaylist,
 } = require("./generate");
 
 const ROUTES = {
+  "/dam": { filename: "dam.m3u", generator: generateDamPlaylist },
+  "/dam.m3u": { filename: "dam.m3u", generator: generateDamPlaylist },
+  "/ondemand": { filename: "dam.m3u", generator: generateDamPlaylist },
+  "/ondemand.m3u": { filename: "dam.m3u", generator: generateDamPlaylist },
+  "/damitv": { filename: "dam.m3u", generator: generateDamPlaylist },
+  "/damitv.m3u": { filename: "dam.m3u", generator: generateDamPlaylist },
+
   "/strm": { filename: "strm.m3u", generator: generateStrmPlaylist },
   "/strm.m3u": { filename: "strm.m3u", generator: generateStrmPlaylist },
   "/stream": { filename: "strm.m3u", generator: generateStrmPlaylist },
@@ -39,6 +49,11 @@ const ROUTES = {
   "/vidcdn": { filename: "channel3.m3u", generator: generateChannel3Playlist },
   "/vidcdn.m3u": { filename: "channel3.m3u", generator: generateChannel3Playlist },
 
+  "/channel4": { filename: "channel4.m3u", generator: generateChannel4Playlist },
+  "/channel4.m3u": { filename: "channel4.m3u", generator: generateChannel4Playlist },
+  "/sports247-channels": { filename: "channel4.m3u", generator: generateChannel4Playlist },
+  "/sports247-channels.m3u": { filename: "channel4.m3u", generator: generateChannel4Playlist },
+
   "/pit": { filename: "pit.m3u", generator: generatePitPlaylist },
   "/pit.m3u": { filename: "pit.m3u", generator: generatePitPlaylist },
 
@@ -46,6 +61,11 @@ const ROUTES = {
   "/cine.m3u": { filename: "cine.m3u", generator: generateCinePlaylist },
   "/cinevid": { filename: "cine.m3u", generator: generateCinePlaylist },
   "/cinevid.m3u": { filename: "cine.m3u", generator: generateCinePlaylist },
+
+  "/247": { filename: "247.m3u", generator: generateSports247Playlist },
+  "/247.m3u": { filename: "247.m3u", generator: generateSports247Playlist },
+  "/sports247": { filename: "247.m3u", generator: generateSports247Playlist },
+  "/sports247.m3u": { filename: "247.m3u", generator: generateSports247Playlist },
 
   "/all": { filename: "all.m3u", generator: generateCombinedPlaylist },
   "/all.m3u": { filename: "all.m3u", generator: generateCombinedPlaylist },

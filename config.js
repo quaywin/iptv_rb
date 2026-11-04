@@ -19,6 +19,11 @@ const config = {
   cineApiUrl: env.CINE_API_URL || "https://cinevid.st/api/public/events",
   vidcdnChannelsUrl: env.VIDCDN_CHANNELS_URL || "https://vidcdn.vip/api/channels",
   cineEmbedChannelBaseUrl: env.CINE_EMBED_CHANNEL_BASE_URL || "https://cinevid.st/embed/channel",
+  damApiUrl: env.DAM_API_URL || "https://ondemand.st/papi/api/streams",
+  damScrapeServiceUrl: env.DAM_SCRAPE_SERVICE_URL || "https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true",
+  sports247Url: env.SPORTS247_URL || "https://en.sports247.ru",
+  matchoraApiUrl: env.MATCHORA_API_URL || "https://matchora.to/api/v1",
+  sports247ScrapeServiceUrl: env.SPORTS247_SCRAPE_SERVICE_URL || env.DAM_SCRAPE_SERVICE_URL || "https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true",
   scrapeServiceUrl: env.SCRAPE_SERVICE_URL || "https://proxy.quaywin.com/scrape-stream?proxy=true",
   strmScrapeServiceUrl: env.STRM_SCRAPE_SERVICE_URL || "https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true",
   cineScrapeServiceUrl: env.CINE_SCRAPE_SERVICE_URL || "https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true",
@@ -31,6 +36,7 @@ const config = {
   timeout: getInt(env.TIMEOUT, 5000),
   hoursBack: getInt(env.HOURS_BACK, 4),
   hoursAhead: getInt(env.HOURS_AHEAD, 24),
+  maxChannelsPerEvent: env.MAX_CHANNELS_PER_EVENT !== undefined ? parseInt(env.MAX_CHANNELS_PER_EVENT, 10) : 4,
   timezone: env.TIMEZONE || "Asia/Ho_Chi_Minh",
 };
 

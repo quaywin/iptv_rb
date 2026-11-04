@@ -27,6 +27,7 @@ const SPORT_ICONS = {
   hockey: "🏒",
   combat: "🥊",
   fighting: "🥊",
+  fight: "🥊",
   baseball: "⚾",
   racing: "🏎️",
   motorsport: "🏎️",
@@ -64,9 +65,11 @@ const SPORT_ICONS = {
   wrestling: "🤼",
   "professional wrestling": "🤼",
   "american football": "🏈",
+  "american-football": "🏈",
   "australian football": "🏉",
   "ice hockey": "🏒",
   "motorsports": "🏎️",
+  "motor-sports": "🏎️",
   "golf": "⛳",
   "rugby": "🏉",
   "volleyball": "🏐",
@@ -75,14 +78,15 @@ const SPORT_ICONS = {
   "table tennis": "🏓",
   "handball": "🤾",
   "24/7 streams": "📺",
+  "24/7-streams": "📺",
   "live shows": "📺",
 };
 
 function getSportIcon(category, provider = "strm") {
   if (!category) return "🏆";
   const key = category.toLowerCase().trim();
-  if ((provider === "ppv" || provider === "gk" || provider === "cine" || provider === "cinevid") && key === "football") {
-    return "⚽"; // In PPV.st, GK/ReedStreams & Cinevid, "Football" is European Football (Soccer)
+  if ((provider === "ppv" || provider === "gk" || provider === "cine" || provider === "cinevid" || provider === "dam" || provider === "ondemand") && key === "football") {
+    return "⚽"; // In PPV.st, GK/ReedStreams, Cinevid & DAM, "Football" is European Football (Soccer)
   }
   return SPORT_ICONS[key] || "🏆";
 }
