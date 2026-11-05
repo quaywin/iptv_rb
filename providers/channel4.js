@@ -123,6 +123,68 @@ function decodeHtmlEntities(str) {
 }
 
 /**
+ * Quality ranking: 4K/FHD (3) > HD (2) > Default/Unspecified (1) > SD (0)
+ */
+function getQualityRank(qualityStr = "", nameStr = "") {
+  const combined = ((qualityStr || "") + " " + (nameStr || "")).toUpperCase();
+  if (combined.includes("4K") || combined.includes("UHD") || combined.includes("FHD") || combined.includes("1080")) return 3;
+  if (combined.includes("HD") || combined.includes("720")) return 2;
+  if (combined.includes("SD") || combined.includes("480") || combined.includes("360")) return 0;
+  return 1;
+}
+
+/**
+ * Normalizes channel name for deduplication.
+ * - Converts '+' to 'plus' so 'Sport1+' and 'Sport1' remain distinct
+ * - Strips common resolution tags (HD, SD, FHD, 1080p, etc.)
+ * - Normalizes 'sports' to 'sport' and removes leading zeros
+ * - Preserves Unicode characters (Cyrillic, Arabic, Greek, etc.)
+ */
+function normalizeChannelKey(name = "") {
+  if (!name) return "";
+  return name
+    .toLowerCase()
+    .replace(/\+/g, "plus")
+    .replace(/\b(4k|uhd|fhd|1080p?|720p?|480p?|360p?|hd|sd)\b/gi, "")
+    .replace(/\bsports?\b/gu, "sport")
+    .replace(/\b0+(\d+)\b/g, "$1")
+    .replace(/[^\p{L}\p{N}]/gu, "")
+    .trim();
+}
+
+/**
+ * Groups feeds by Country + Normalized Channel Name and keeps the highest quality feed (FHD > HD > SD).
+ */
+function deduplicateBestQualityChannels(channels) {
+  const groupedFeeds = new Map();
+  for (const ch of channels) {
+    const raw = ch.rawName || ch.name || "";
+    const normKey = normalizeChannelKey(raw);
+    const key = (ch.country || "GLOBAL") + "_" + (normKey || ch.channelId || raw);
+    if (!groupedFeeds.has(key)) {
+      groupedFeeds.set(key, []);
+    }
+    groupedFeeds.get(key).push(ch);
+  }
+
+  const result = [];
+  for (const group of groupedFeeds.values()) {
+    if (group.length === 1) {
+      result.push(group[0]);
+    } else {
+      // Sort by Quality Rank descending (FHD > HD > Default > SD)
+      group.sort((a, b) => {
+        const qDiff = getQualityRank(b.quality, b.name || b.rawName) - getQualityRank(a.quality, a.name || a.rawName);
+        if (qDiff !== 0) return qDiff;
+        return (a.channelId || "").localeCompare(b.channelId || "");
+      });
+      result.push(group[0]);
+    }
+  }
+  return result;
+}
+
+/**
  * Fetch channels from Matchora JSON API (/api/v1/channels)
  */
 async function fetchChannelsFromApi(cfg) {
@@ -167,7 +229,7 @@ async function fetchChannelsFromApi(cfg) {
     }
   }
 
-  // Deduplicate by channelId
+  // Deduplicate by channelId first
   const feedMap = new Map();
   for (const f of feeds) {
     if (!feedMap.has(f.channelId)) {
@@ -175,8 +237,10 @@ async function fetchChannelsFromApi(cfg) {
     }
   }
 
-  const result = Array.from(feedMap.values());
-  console.log(`Parsed ${result.length} unique feeds from Matchora API.`);
+  // Deduplicate feeds by channel key within the same country, prioritizing Full HD > HD > SD
+  const uniqueFeeds = Array.from(feedMap.values());
+  const result = deduplicateBestQualityChannels(uniqueFeeds);
+  console.log(`Parsed ${result.length} best-quality unique feeds from Matchora API (deduplicated from ${uniqueFeeds.length}).`);
   return result;
 }
 
@@ -277,7 +341,9 @@ async function fetchChannelsFromHtml(cfg) {
   for (const ch of allChannels) {
     if (!channelMap.has(ch.channelId)) channelMap.set(ch.channelId, ch);
   }
-  return Array.from(channelMap.values());
+  const uniqueChannels = Array.from(channelMap.values());
+  const result = deduplicateBestQualityChannels(uniqueChannels);
+  return result;
 }
 
 /**
@@ -331,12 +397,14 @@ async function generateChannel4Playlist(customConfig = {}) {
     return "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
   }
 
-  // Sort channels: Country order -> Channel name A-Z
+  // Sort channels: Country order -> Channel name A-Z -> Quality Rank descending
   channels.sort((a, b) => {
     const cA = getSports247ChannelCountry(a);
     const cB = getSports247ChannelCountry(b);
     if (cA.order !== cB.order) return cA.order - cB.order;
-    return (a.name || "").localeCompare(b.name || "");
+    const nameDiff = (a.name || "").localeCompare(b.name || "");
+    if (nameDiff !== 0) return nameDiff;
+    return getQualityRank(b.quality, b.name) - getQualityRank(a.quality, a.name);
   });
 
   let scrapeBase = cfg.sports247ScrapeServiceUrl || cfg.damScrapeServiceUrl || cfg.scrapeServiceUrl;
@@ -368,6 +436,9 @@ async function generateChannel4Playlist(customConfig = {}) {
 module.exports = {
   COUNTRY_MAP,
   getSports247ChannelCountry,
+  getQualityRank,
+  normalizeChannelKey,
+  deduplicateBestQualityChannels,
   fetchSports247Channels,
   generateChannel4Playlist,
 };
