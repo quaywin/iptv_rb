@@ -4,12 +4,7 @@ compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "public"
 
 [vars]
-SCRAPE_SERVICE_URL = "https://proxy.quaywin.com/scrape-stream?proxy=true"
-STRM_SCRAPE_SERVICE_URL = "https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true"
-CINE_SCRAPE_SERVICE_URL = "https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true"
-DAM_SCRAPE_SERVICE_URL = "https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true"
 STREAM_API_URL = "https://strmfree.st/streams"
-PPV_API_URL = "https://corsproxy.io/?key=c433bce8&url=https%3A%2F%2Fapi.ppv.st%2Fapi%2Fstreams"
 TIM_API_URL = "https://tim-streams.com/api/live-upcoming"
 TIM_CHANNELS_URL = "https://tim-streams.com/api/channels"
 TIM_WATCH_BASE_URL = "https://tim-streams.com/api/watch"

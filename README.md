@@ -7,7 +7,7 @@ A Bun-based high-performance IPTV solution that automatically generates playlist
 1. **Stream List Ingestion**: Fetches active streams and schedules from `https://strmfree.st/streams` (covering Soccer, Basketball, Football, Hockey, Combat, Baseball, Racing, Tennis, Cricket).
 2. **Embed & Scrape Resolution**:
    - Embed URL format: `https://strmfree.st/embed/{category}/{stream_key}` (e.g. `1080p` or standard).
-   - Scrape Microservice: `https://proxy.quaywin.com/scrape-stream?proxy=true&url={embed_url}` returns HTTP 302 or 200 with proxied `.m3u8` manifest.
+   - Scrape Microservice: `https://your-proxy-domain.com/scrape-stream?proxy=true&url={embed_url}` returns HTTP 302 or 200 with proxied `.m3u8` manifest.
 3. **High-Performance Bun Proxy (`/live`)**:
    - Follows upstream 302 redirects to find the active CDN manifest.
    - Dynamically parses and rewrites M3U8 chunk and sub-playlist URLs through the local proxy.
@@ -60,10 +60,10 @@ A Bun-based high-performance IPTV solution that automatically generates playlist
    Key variables in `.env`:
    - `PORT`: Server port (default: `3030`)
    - `STREAM_API_URL`: `https://strmfree.st/streams`
-   - `SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true`
-   - `STRM_SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true`
-   - `CINE_SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true`
-   - `DAM_SCRAPE_SERVICE_URL`: `https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true`
+   - `SCRAPE_SERVICE_URL`: `https://your-proxy-domain.com/scrape-stream?proxy=true`
+   - `STRM_SCRAPE_SERVICE_URL`: `https://your-proxy-domain.com/scrape-stream?proxy=true&proxy_segments=true`
+   - `CINE_SCRAPE_SERVICE_URL`: `https://your-proxy-domain.com/scrape-stream?proxy=true&proxy_segments=true`
+   - `DAM_SCRAPE_SERVICE_URL`: `https://your-proxy-domain.com/scrape-stream?proxy=true&proxy_segments=true`
    - `EMBED_BASE_URL`: `https://strmfree.st/embed`
    - `REFERER`: `https://strmfree.st/`
    - `ORIGIN`: `https://strmfree.st`

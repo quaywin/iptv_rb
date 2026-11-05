@@ -115,8 +115,8 @@ async function generateDamPlaylist(customConfig = {}) {
   console.log(`Filtered and sorted ${activeStreams.length} active DAM streams.`);
 
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
-  let scrapeBase = cfg.damScrapeServiceUrl || cfg.scrapeServiceUrl || "https://proxy.quaywin.com/scrape-stream?proxy=true&proxy_segments=true";
-  if (!scrapeBase.includes("proxy_segments=true")) {
+  let scrapeBase = cfg.damScrapeServiceUrl || cfg.scrapeServiceUrl || "";
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
     const sep = scrapeBase.includes("?") ? "&" : "?";
     scrapeBase = `${scrapeBase}${sep}proxy_segments=true`;
   }
