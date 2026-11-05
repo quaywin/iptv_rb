@@ -1,8 +1,34 @@
 const { getRouteHandler } = require("../routes.js");
+const { handleXtreamRequest } = require("../xtream.js");
 
 export async function onRequest(context) {
   const { request, env, waitUntil } = context;
   const url = new URL(request.url);
+
+  // 1. Handle Xtream Codes API and streams
+  try {
+    const xtreamRes = await handleXtreamRequest({
+      req: request,
+      url,
+      config: {
+        ...env,
+        xtreamPassword: env.XTREAM_PASSWORD !== undefined ? env.XTREAM_PASSWORD : "iptv",
+        xtreamUsers: env.XTREAM_USERS || "",
+        cacheTtl: env.CACHE_TTL ? parseInt(env.CACHE_TTL, 10) : 60,
+      },
+      getOrGeneratePlaylist: async (filename, generator) => {
+        return await generator(env);
+      },
+    });
+
+    if (xtreamRes) {
+      return xtreamRes;
+    }
+  } catch (xtreamErr) {
+    console.error("Xtream API error on edge:", xtreamErr.message);
+  }
+
+  // 2. Handle standard M3U playlist routes
   const route = getRouteHandler(url.pathname);
 
   if (!route) {

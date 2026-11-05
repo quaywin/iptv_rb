@@ -38,6 +38,8 @@ const config = {
   hoursAhead: getInt(env.HOURS_AHEAD, 24),
   maxChannelsPerEvent: env.MAX_CHANNELS_PER_EVENT !== undefined ? parseInt(env.MAX_CHANNELS_PER_EVENT, 10) : 4,
   timezone: env.TIMEZONE || "Asia/Ho_Chi_Minh",
+  xtreamPassword: env.XTREAM_PASSWORD !== undefined ? env.XTREAM_PASSWORD : "iptv",
+  xtreamUsers: env.XTREAM_USERS || "",
 };
 
 module.exports = config;

@@ -163,5 +163,50 @@ Add the playlist URL to your favorite IPTV player (TiviMate, VLC, OTT Navigator)
   https://iptv-140.pages.dev/all
   ```
 
+---
+
+## 🚀 Xtream Codes API (Per-Provider & Isolated)
+
+The server now natively implements the official **Xtream Codes API** standard (`player_api.php`, `/live/...`, `/xmltv.php`). Each provider can be accessed independently as its own isolated playlist using its **Username**, preventing client crashes and lag caused by thousands of channels.
+
+### Setup on IPTV Apps (TiviMate, IPTV Smarters, OTT Navigator)
+
+When adding a playlist via **Xtream Codes Parameters**:
+- **Server URL**: `http://<your-server-or-domain>:3030` (or `https://iptv-140.pages.dev`)
+- **Username**: Name of the desired provider (see table below)
+- **Password**: `iptv` (default, or custom value set via `XTREAM_PASSWORD` in `.env`)
+
+### Available Provider Accounts
+
+| Provider / Content | Username | Content Overview |
+| :--- | :--- | :--- |
+| **STRM Sports** | `strm` *(or `stream`)* | Live sports events across 9 sports with 1080p mirrors |
+| **Sports247 TV (24/7)** | `channel4` *(or `c4`)* | 2,750+ 24/7 channels grouped by 56+ countries |
+| **SportsBite Channels** | `channel2` *(or `sportsbite`)* | 830+ 24/7 channels grouped by 47 countries |
+| **VidCDN Channels** | `channel3` *(or `vidcdn`)* | 980+ 24/7 TV channels grouped by 48+ countries |
+| **Sports247 Events** | `247` *(or `sports247`)* | Live match events & multi-server matchora embeds |
+| **DAMITV** | `dam` *(or `ondemand`)* | Live sports events & 24/7 channels |
+| **Cinevid Sports** | `cine` *(or `cinevid`)* | Live sports events & schedule |
+| **PPV Streams** | `ppv` | Live PPV combat & events |
+| **TimChannels (24/7)** | `channel` *(or `channels`)* | 219 continuous channels grouped by country |
+| **TimStreams Live** | `tim` *(or `tim-live`)* | Live upcoming sports matches |
+| **PitSport** | `pit` | PitSport live matches & racing |
+| **ReedStreams (GK)** | `gk` *(or `reed`)* | Live football & sports matches |
+| **All Combined** | `all` | Full aggregated master list (if desired) |
+
+### Advanced User & Password Configuration
+
+In `.env`:
+```env
+# Default global password for provider logins
+XTREAM_PASSWORD=iptv
+
+# Optional: Map custom usernames to specific providers
+# Format: username:password:provider,username2:password2:provider2
+XTREAM_USERS=sports_fan:mysecret:strm,my_tv:pass123:channel4,vip_user:pass999:all
+```
+
+---
+
 ## License
 MIT

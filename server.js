@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const config = require("./config");
 const { getRouteHandler } = require("./routes");
+const { handleXtreamRequest } = require("./xtream");
 
 const DATA_DIR = path.join(__dirname, "data");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
@@ -69,6 +70,24 @@ const server = Bun.serve({
   port: config.port,
   async fetch(req) {
     const url = new URL(req.url);
+
+    // 1. Handle Xtream Codes API and streams
+    try {
+      const xtreamRes = await handleXtreamRequest({
+        req,
+        url,
+        config,
+        getOrGeneratePlaylist,
+      });
+      if (xtreamRes) {
+        return xtreamRes;
+      }
+    } catch (xtreamErr) {
+      console.error("Xtream API error:", xtreamErr);
+      return new Response("Xtream Internal Error", { status: 500 });
+    }
+
+    // 2. Handle standard M3U playlist routes
     const route = getRouteHandler(url.pathname);
 
     if (!route) {
@@ -100,12 +119,21 @@ const server = Bun.serve({
 });
 
 console.log(`IPTV Server is running at http://localhost:${server.port}`);
-console.log(`- STRM:    http://localhost:${server.port}/strm`);
-console.log(`- PPV:     http://localhost:${server.port}/ppv`);
-console.log(`- GK:      http://localhost:${server.port}/gk`);
-console.log(`- TIM:     http://localhost:${server.port}/tim`);
-console.log(`- CHANNEL: http://localhost:${server.port}/channel`);
-console.log(`- CHANNEL2:http://localhost:${server.port}/channel2`);
-console.log(`- DAM:     http://localhost:${server.port}/dam`);
-console.log(`- PIT:     http://localhost:${server.port}/pit`);
-console.log(`- ALL:     http://localhost:${server.port}/all`);
+console.log(`--- M3U Playlists ---`);
+console.log(`- STRM:     http://localhost:${server.port}/strm`);
+console.log(`- PPV:      http://localhost:${server.port}/ppv`);
+console.log(`- GK:       http://localhost:${server.port}/gk`);
+console.log(`- TIM:      http://localhost:${server.port}/tim`);
+console.log(`- CHANNEL:  http://localhost:${server.port}/channel`);
+console.log(`- CHANNEL2: http://localhost:${server.port}/channel2`);
+console.log(`- CHANNEL3: http://localhost:${server.port}/channel3`);
+console.log(`- CHANNEL4: http://localhost:${server.port}/channel4`);
+console.log(`- 247:      http://localhost:${server.port}/247`);
+console.log(`- DAM:      http://localhost:${server.port}/dam`);
+console.log(`- PIT:      http://localhost:${server.port}/pit`);
+console.log(`- CINE:     http://localhost:${server.port}/cine`);
+console.log(`- ALL:      http://localhost:${server.port}/all`);
+console.log(`--- Xtream Codes API ---`);
+console.log(`- API URL:  http://localhost:${server.port}/player_api.php`);
+console.log(`- Users:    Use provider name as username (e.g. "channel4", "strm", "247", "dam", "all")`);
+console.log(`- Password: "${config.xtreamPassword || "(any)"}" (configurable via XTREAM_PASSWORD)`);
