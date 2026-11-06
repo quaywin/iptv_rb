@@ -705,6 +705,9 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
 
       // Build target video resolver URL
       const targetUrl = buildVodResolverUrl(streamId, config?.vodResolverUrl);
+      if (targetUrl.includes("your-proxy-domain.com")) {
+        console.error(`[XTREAM:CONFIG_ERROR ${timeStr}] ❌ VOD_RESOLVER_URL is not set in Cloudflare Pages environment variables! Falling back to unconfigured placeholder: ${targetUrl}`);
+      }
       console.log(`[XTREAM ${timeStr}] ▶️ PLAY Movie #${streamId} (${auth.username}) -> 302 Redirect to ${targetUrl}`);
 
       return new Response(null, {
@@ -747,6 +750,9 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
 
       // Build target series video resolver URL
       const targetUrl = buildSeriesResolverUrl(seriesId, sNum, epNum, config?.seriesResolverUrl);
+      if (targetUrl.includes("your-proxy-domain.com")) {
+        console.error(`[XTREAM:CONFIG_ERROR ${timeStr}] ❌ SERIES_RESOLVER_URL is not set in Cloudflare Pages environment variables! Falling back to unconfigured placeholder: ${targetUrl}`);
+      }
       console.log(`[XTREAM ${timeStr}] ▶️ PLAY Series episode #${episodeId} (Series: ${seriesId}, S${sNum}E${epNum}) (${auth.username}) -> 302 Redirect to ${targetUrl}`);
 
       return new Response(null, {
