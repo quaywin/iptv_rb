@@ -59,27 +59,31 @@ async function fetchTmdb(endpoint, params = {}, apiKey = DEFAULT_TMDB_API_KEY, t
 }
 
 /**
- * Get VOD Movie Categories (Genres)
+ * Curated VOD Categories (Cinema by year, Streaming Platforms, All-Time Acclaimed)
+ */
+const VOD_CATEGORIES = [
+  { category_id: "2026", category_name: "Phim Chiếu Rạp 2026", parent_id: 0, query: { primary_release_year: "2026", sort_by: "popularity.desc" } },
+  { category_id: "1001", category_name: "Phim Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "2025", category_name: "Phim 2025", parent_id: 0, query: { primary_release_year: "2025", sort_by: "popularity.desc" } },
+  { category_id: "2024", category_name: "Phim 2024", parent_id: 0, query: { primary_release_year: "2024", sort_by: "popularity.desc" } },
+  { category_id: "2023", category_name: "Phim 2023", parent_id: 0, query: { primary_release_year: "2023", sort_by: "popularity.desc" } },
+  { category_id: "1002", category_name: "Phim Netflix", parent_id: 0, query: { with_watch_providers: "8", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1003", category_name: "Phim HBO Max", parent_id: 0, query: { with_watch_providers: "1899|384", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1004", category_name: "Phim Disney+", parent_id: 0, query: { with_watch_providers: "337", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1005", category_name: "Phim Apple TV+", parent_id: 0, query: { with_watch_providers: "350", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1006", category_name: "Phim Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "1000" } },
+  { category_id: "1007", category_name: "Phim Hoạt Hình Chiếu Rạp", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
+];
+
+/**
+ * Get VOD Movie Categories
  */
 async function getVodCategories(apiKey) {
-  try {
-    const json = await fetchTmdb("/genre/movie/list", {}, apiKey);
-    const genres = json.genres || [];
-    return genres.map(g => ({
-      category_id: String(g.id),
-      category_name: g.name,
-      parent_id: 0,
-    }));
-  } catch (err) {
-    console.error("Error fetching VOD categories:", err.message);
-    return [
-      { category_id: "28", category_name: "Action", parent_id: 0 },
-      { category_id: "12", category_name: "Adventure", parent_id: 0 },
-      { category_id: "16", category_name: "Animation", parent_id: 0 },
-      { category_id: "35", category_name: "Comedy", parent_id: 0 },
-      { category_id: "878", category_name: "Science Fiction", parent_id: 0 },
-    ];
-  }
+  return VOD_CATEGORIES.map(c => ({
+    category_id: c.category_id,
+    category_name: c.category_name,
+    parent_id: 0,
+  }));
 }
 
 /**
@@ -130,13 +134,23 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
       }
     } else if (hasPageParam) {
       if (!isAllCategory(categoryId)) {
-        baseParams.with_genres = String(categoryId);
+        const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
+        if (catDef) {
+          Object.assign(baseParams, catDef.query);
+        } else {
+          baseParams.with_genres = String(categoryId);
+        }
       }
       const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
       results = json?.results || [];
     } else if (!isAllCategory(categoryId)) {
       // Specific category: fetch 10 pages (~200 movies)
-      baseParams.with_genres = String(categoryId);
+      const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
+      if (catDef) {
+        Object.assign(baseParams, catDef.query);
+      } else {
+        baseParams.with_genres = String(categoryId);
+      }
       const responses = await Promise.all(
         [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
       );
@@ -149,13 +163,20 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         }
       }
     } else {
-      // ALL category initial catalog: fetch newest releases + popular blockbusters (~360+ movies)
-      const [newestRes, popularRes] = await Promise.all([
-        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(p => fetchTmdb("/movie/popular", { page: String(p) }, apiKey))),
+      // ALL category initial catalog: fetch newest 2026 cinema + Peacock + 2025 + popular blockbusters (~400+ movies)
+      const [res2026, resPeacock, res2025, resPop] = await Promise.all([
+        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/movie", { primary_release_year: "2026", sort_by: "popularity.desc", page: String(p) }, apiKey))),
+        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/movie", { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc", page: String(p) }, apiKey))),
+        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/movie", { primary_release_year: "2025", sort_by: "popularity.desc", page: String(p) }, apiKey))),
+        Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb("/movie/popular", { page: String(p) }, apiKey))),
       ]);
 
-      const rawList = [...newestRes.flatMap(r => r?.results || []), ...popularRes.flatMap(r => r?.results || [])];
+      const rawList = [
+        ...res2026.flatMap(r => r?.results || []),
+        ...resPeacock.flatMap(r => r?.results || []),
+        ...res2025.flatMap(r => r?.results || []),
+        ...resPop.flatMap(r => r?.results || []),
+      ];
       const seen = new Set();
       for (const item of rawList) {
         if (item?.id && !seen.has(item.id)) {
@@ -170,12 +191,15 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
     const baseNum = hasPageParam ? (page - 1) * 20 : 0;
     return results.map((m, idx) => {
       const year = m.release_date ? m.release_date.substring(0, 4) : "";
-      const genreId = (m.genre_ids && m.genre_ids.length > 0)
-        ? m.genre_ids[0]
-        : (m.genres && m.genres.length > 0 ? m.genres[0].id : null);
-      const primaryCatId = genreId !== null && genreId !== undefined
-        ? String(genreId)
-        : (!isAllCategory(categoryId) ? String(categoryId) : "0");
+      let primaryCatId = "2026";
+      if (!isAllCategory(categoryId)) {
+        primaryCatId = String(categoryId);
+      } else {
+        if (year === "2025") primaryCatId = "2025";
+        else if (year === "2024") primaryCatId = "2024";
+        else if (year === "2023") primaryCatId = "2023";
+        else if (parseInt(year, 10) < 2023) primaryCatId = "1006";
+      }
       return {
         num: baseNum + idx + 1,
         name: year ? `${m.title} (${year})` : m.title,
@@ -261,27 +285,30 @@ async function getVodInfo(tmdbId, apiKey) {
 }
 
 /**
- * Get Series Categories (TV Genres)
+ * Curated Series Categories (TV Shows by year, Streaming Platforms, All-Time Acclaimed)
+ */
+const SERIES_CATEGORIES = [
+  { category_id: "2026", category_name: "Series 2026", parent_id: 0, query: { first_air_date_year: "2026", sort_by: "popularity.desc" } },
+  { category_id: "1001", category_name: "Series Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "2025", category_name: "Series 2025", parent_id: 0, query: { first_air_date_year: "2025", sort_by: "popularity.desc" } },
+  { category_id: "2024", category_name: "Series 2024", parent_id: 0, query: { first_air_date_year: "2024", sort_by: "popularity.desc" } },
+  { category_id: "1002", category_name: "Series Netflix", parent_id: 0, query: { with_watch_providers: "8", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1003", category_name: "Series HBO Max", parent_id: 0, query: { with_watch_providers: "1899|384", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1004", category_name: "Series Disney+", parent_id: 0, query: { with_watch_providers: "337", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1005", category_name: "Series Apple TV+", parent_id: 0, query: { with_watch_providers: "350", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1006", category_name: "Series Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "500" } },
+  { category_id: "1007", category_name: "Series Anime / Hoạt Hình", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
+];
+
+/**
+ * Get Series Categories
  */
 async function getSeriesCategories(apiKey) {
-  try {
-    const json = await fetchTmdb("/genre/tv/list", {}, apiKey);
-    const genres = json.genres || [];
-    return genres.map(g => ({
-      category_id: String(g.id),
-      category_name: g.name,
-      parent_id: 0,
-    }));
-  } catch (err) {
-    console.error("Error fetching series categories:", err.message);
-    return [
-      { category_id: "10759", category_name: "Action & Adventure", parent_id: 0 },
-      { category_id: "16", category_name: "Animation", parent_id: 0 },
-      { category_id: "35", category_name: "Comedy", parent_id: 0 },
-      { category_id: "18", category_name: "Drama", parent_id: 0 },
-      { category_id: "10765", category_name: "Sci-Fi & Fantasy", parent_id: 0 },
-    ];
-  }
+  return SERIES_CATEGORIES.map(c => ({
+    category_id: c.category_id,
+    category_name: c.category_name,
+    parent_id: 0,
+  }));
 }
 
 /**
@@ -316,13 +343,23 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
       }
     } else if (hasPageParam) {
       if (!isAllCategory(categoryId)) {
-        baseParams.with_genres = String(categoryId);
+        const catDef = SERIES_CATEGORIES.find(c => c.category_id === String(categoryId));
+        if (catDef) {
+          Object.assign(baseParams, catDef.query);
+        } else {
+          baseParams.with_genres = String(categoryId);
+        }
       }
       const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
       results = json?.results || [];
     } else if (!isAllCategory(categoryId)) {
       // Specific category: fetch 10 pages (~200 series)
-      baseParams.with_genres = String(categoryId);
+      const catDef = SERIES_CATEGORIES.find(c => c.category_id === String(categoryId));
+      if (catDef) {
+        Object.assign(baseParams, catDef.query);
+      } else {
+        baseParams.with_genres = String(categoryId);
+      }
       const responses = await Promise.all(
         [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
       );
@@ -334,18 +371,30 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
           results.push(item);
         }
       }
+
+      // If Peacock category, ensure Poker Face (120998) is always included
+      if (String(categoryId) === "1001" && !seen.has(120998)) {
+        try {
+          const pf = await fetchTmdb("/tv/120998", {}, apiKey);
+          if (pf?.id) results.unshift(pf);
+        } catch (_) {}
+      }
     } else {
-      // ALL category initial catalog: fetch newest releases + popular TV series + all-time acclaimed series (~450+ shows)
-      const [newestRes, popularRes, topVotedRes] = await Promise.all([
-        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb("/tv/popular", { page: String(p) }, apiKey))),
+      // ALL category initial catalog: 2026 + Peacock + 2025 + popular series + top voted (~450+ shows)
+      const [res2026, resPeacock, res2025, resPop, resTop] = await Promise.all([
+        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { first_air_date_year: "2026", sort_by: "popularity.desc", page: String(p) }, apiKey))),
+        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc", page: String(p) }, apiKey))),
+        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { first_air_date_year: "2025", sort_by: "popularity.desc", page: String(p) }, apiKey))),
+        Promise.all([1, 2, 3, 4, 5, 6, 7, 8].map(p => fetchTmdb("/tv/popular", { page: String(p) }, apiKey))),
         Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { sort_by: "vote_count.desc", page: String(p) }, apiKey))),
       ]);
 
       const rawList = [
-        ...newestRes.flatMap(r => r?.results || []),
-        ...popularRes.flatMap(r => r?.results || []),
-        ...topVotedRes.flatMap(r => r?.results || []),
+        ...res2026.flatMap(r => r?.results || []),
+        ...resPeacock.flatMap(r => r?.results || []),
+        ...res2025.flatMap(r => r?.results || []),
+        ...resPop.flatMap(r => r?.results || []),
+        ...resTop.flatMap(r => r?.results || []),
       ];
       const seen = new Set();
       for (const item of rawList) {
@@ -372,12 +421,14 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
     const baseNum = hasPageParam ? (page - 1) * 20 : 0;
     return results.map((s, idx) => {
       const year = s.first_air_date ? s.first_air_date.substring(0, 4) : "";
-      const genreId = (s.genre_ids && s.genre_ids.length > 0)
-        ? s.genre_ids[0]
-        : (s.genres && s.genres.length > 0 ? s.genres[0].id : null);
-      const primaryCatId = genreId !== null && genreId !== undefined
-        ? String(genreId)
-        : (!isAllCategory(categoryId) ? String(categoryId) : "0");
+      let primaryCatId = "2026";
+      if (!isAllCategory(categoryId)) {
+        primaryCatId = String(categoryId);
+      } else {
+        if (year === "2025") primaryCatId = "2025";
+        else if (year === "2024") primaryCatId = "2024";
+        else if (parseInt(year, 10) < 2024) primaryCatId = "1006";
+      }
       const airDateTs = s.first_air_date
         ? String(Math.floor(new Date(s.first_air_date).getTime() / 1000))
         : String(Math.floor(Date.now() / 1000));
@@ -550,6 +601,8 @@ function buildSeriesResolverUrl(tmdbId, season, episode, template = "") {
 module.exports = {
   DEFAULT_TMDB_API_KEY,
   isAllCategory,
+  VOD_CATEGORIES,
+  SERIES_CATEGORIES,
   getVodCategories,
   getVodStreams,
   getVodInfo,
