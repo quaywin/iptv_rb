@@ -513,7 +513,8 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
           ...CORS_HEADERS,
           "Content-Type": "application/json; charset=utf-8",
           "X-Page": String(page),
-          "X-Per-Page": "20",
+          "X-Per-Page": hasPageParam ? "20" : String(streams.length),
+          "X-Total-Count": String(streams.length),
         },
       });
     }
@@ -557,7 +558,8 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
           ...CORS_HEADERS,
           "Content-Type": "application/json; charset=utf-8",
           "X-Page": String(page),
-          "X-Per-Page": "20",
+          "X-Per-Page": hasPageParam ? "20" : String(series.length),
+          "X-Total-Count": String(series.length),
         },
       });
     }

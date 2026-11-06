@@ -135,10 +135,10 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
       const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
       results = json?.results || [];
     } else if (!isAllCategory(categoryId)) {
-      // Specific category: fetch 5 pages (~100 movies)
+      // Specific category: fetch 10 pages (~200 movies)
       baseParams.with_genres = String(categoryId);
       const responses = await Promise.all(
-        [1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
       );
       const rawList = responses.flatMap(r => r?.results || []);
       const seen = new Set();
@@ -321,10 +321,10 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
       const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
       results = json?.results || [];
     } else if (!isAllCategory(categoryId)) {
-      // Specific category: fetch 5 pages
+      // Specific category: fetch 10 pages (~200 series)
       baseParams.with_genres = String(categoryId);
       const responses = await Promise.all(
-        [1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
       );
       const rawList = responses.flatMap(r => r?.results || []);
       const seen = new Set();
