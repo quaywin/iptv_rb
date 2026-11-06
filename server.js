@@ -94,6 +94,7 @@ const server = Bun.serve({
     const route = getRouteHandler(url.pathname);
 
     if (!route) {
+      console.warn(`[HTTP:404 ${timeStr}] ⚠️ Unsupported / Unhandled route: ${req.method} ${url.pathname}${url.search} | UA: "${ua}"`);
       return new Response("Not Found", { status: 404 });
     }
 

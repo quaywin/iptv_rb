@@ -616,17 +616,24 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       });
     }
 
-    // Action: Short EPG
-    if (action === "get_short_epg") {
+    // Action: EPG listings (get_short_epg, get_simple_data_table, get_all_epg)
+    if (action === "get_short_epg" || action === "get_simple_data_table" || action === "get_all_epg") {
+      console.log(`[XTREAM ${timeStr}] 📅 EPG action "${action}" requested (user: "${username}") -> returned empty epg_listings`);
       return Response.json({ epg_listings: [] }, {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
       });
     }
 
-    // Fallback: Default status response
-    console.log(`[XTREAM ${timeStr}] ℹ️ Default status response returned for action: "${action || "none"}"`);
-    return Response.json({ user_info: { auth: 1, status: "Active" } }, {
+    // Fallback: Default status response for unsupported / unrecognized action
+    console.warn(
+      `[XTREAM:UNSUPPORTED ${timeStr}] ⚠️ Unhandled action requested: "${action || "none"}" | User: "${username}" | App: "${userAgent}" | Params:`,
+      JSON.stringify(safeParams)
+    );
+    return Response.json({
+      user_info: { auth: 1, status: "Active" },
+      message: `Action "${action || "none"}" is not implemented`,
+    }, {
       status: 200,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
     });
@@ -643,6 +650,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       // Extract streamId integer
       const streamIdMatch = rawStream.match(/^(\d+)/);
       if (!streamIdMatch) {
+        console.warn(`[XTREAM:UNSUPPORTED ${timeStr}] ⚠️ Invalid live stream format requested: "${rawStream}" (User: "${username}", App: "${userAgent}")`);
         return new Response("Invalid stream id", { status: 400, headers: CORS_HEADERS });
       }
 
@@ -683,6 +691,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
 
       const streamIdMatch = rawStream.match(/^(\d+)/);
       if (!streamIdMatch) {
+        console.warn(`[XTREAM:UNSUPPORTED ${timeStr}] ⚠️ Invalid movie stream format requested: "${rawStream}" (User: "${username}", App: "${userAgent}")`);
         return new Response("Invalid movie id", { status: 400, headers: CORS_HEADERS });
       }
 
@@ -716,6 +725,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
 
       const epIdMatch = rawStream.match(/^(\d+)/);
       if (!epIdMatch) {
+        console.warn(`[XTREAM:UNSUPPORTED ${timeStr}] ⚠️ Invalid series episode format requested: "${rawStream}" (User: "${username}", App: "${userAgent}")`);
         return new Response("Invalid episode id", { status: 400, headers: CORS_HEADERS });
       }
 
@@ -775,8 +785,16 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     });
   }
 
-  // 4. Handle /xmltv.php (XMLTV EPG placeholder)
-  if (pathname === "/xmltv.php" || pathname.endsWith("/xmltv.php")) {
+  // 6. Handle /xmltv.php, /epg.php, /epg.xml (XMLTV EPG placeholder)
+  if (
+    pathname === "/xmltv.php" ||
+    pathname.endsWith("/xmltv.php") ||
+    pathname === "/epg.php" ||
+    pathname.endsWith("/epg.php") ||
+    pathname === "/epg.xml" ||
+    pathname.endsWith("/epg.xml")
+  ) {
+    console.log(`[XTREAM ${timeStr}] 📅 XMLTV EPG download requested via ${pathname} (App: "${userAgent}")`);
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="IPTV_RB"></tv>`;
     return new Response(xml, {
       status: 200,

@@ -452,6 +452,39 @@ https://stream.example.com/skypl/index.m3u8
   const actSeriesSearchJson = await actSeriesSearchRes.json();
   console.log("action=search_series (Breaking):", Array.isArray(actSeriesSearchJson) && actSeriesSearchJson.some(s => s.name.toLowerCase().includes("breaking")) ? "PASSED" : "FAILED");
 
+  // 5j. Unsupported action test (should log warning and return status Active)
+  const unhandledReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=unknown_custom_action&foo=bar`);
+  const unhandledRes = await handleXtreamRequest({
+    req: unhandledReq,
+    url: new URL(unhandledReq.url),
+    config,
+    getOrGeneratePlaylist: dummyGetOrGenerate,
+  });
+  const unhandledJson = await unhandledRes.json();
+  console.log("unhandled action fallback status:", unhandledJson.user_info.status === "Active" ? "PASSED" : "FAILED");
+
+  // 5k. EPG get_simple_data_table test
+  const epgTableReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_simple_data_table&stream_id=123`);
+  const epgTableRes = await handleXtreamRequest({
+    req: epgTableReq,
+    url: new URL(epgTableReq.url),
+    config,
+    getOrGeneratePlaylist: dummyGetOrGenerate,
+  });
+  const epgTableJson = await epgTableRes.json();
+  console.log("get_simple_data_table empty listings:", Array.isArray(epgTableJson.epg_listings) ? "PASSED" : "FAILED");
+
+  // 5l. /epg.xml placeholder test
+  const epgXmlReq = new Request("http://localhost:3030/epg.xml");
+  const epgXmlRes = await handleXtreamRequest({
+    req: epgXmlReq,
+    url: new URL(epgXmlReq.url),
+    config,
+    getOrGeneratePlaylist: dummyGetOrGenerate,
+  });
+  const epgXmlText = await epgXmlRes.text();
+  console.log("/epg.xml XMLTV response:", epgXmlText.includes("<tv") ? "PASSED" : "FAILED");
+
   console.log("\n🎉 ALL XTREAM CODES API & VOD/SERIES TESTS PASSED SUCCESSFULLY! 🎉\n");
 }
 

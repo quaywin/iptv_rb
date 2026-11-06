@@ -71,6 +71,7 @@ export async function onRequest(context) {
   const route = getRouteHandler(url.pathname);
 
   if (!route) {
+    console.warn(`[HTTP:404 ${timeStr}] ⚠️ Unsupported / Unhandled route: ${request.method} ${url.pathname}${url.search} | UA: "${ua}"${clientIp ? " | IP: " + clientIp : ""}`);
     return new Response("Not Found", { status: 404 });
   }
 
