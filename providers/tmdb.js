@@ -576,8 +576,6 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         backdrop_path: s.backdrop_path ? [`${TMDB_IMAGE_BASE}/w1280${s.backdrop_path}`] : [],
         youtube_trailer: "",
         episode_run_time: "45",
-        category_id: primaryCatId,
-        category_ids: [primaryCatId],
       };
     });
   } catch (err) {
