@@ -6,6 +6,8 @@ const {
   generateSportsbitePlaylist,
   generateChannel3Playlist,
   generateChannel4Playlist,
+  generateChannel5Playlist,
+  generateCdnPlaylist,
   generateGkPlaylist,
   generatePitPlaylist,
   generateCinePlaylist,
@@ -53,6 +55,13 @@ const ROUTES = {
   "/channel4.m3u": { filename: "channel4.m3u", generator: generateChannel4Playlist },
   "/sports247-channels": { filename: "channel4.m3u", generator: generateChannel4Playlist },
   "/sports247-channels.m3u": { filename: "channel4.m3u", generator: generateChannel4Playlist },
+
+  "/channel5": { filename: "channel5.m3u", generator: generateChannel5Playlist },
+  "/channel5.m3u": { filename: "channel5.m3u", generator: generateChannel5Playlist },
+  "/cdn": { filename: "cdn.m3u", generator: generateCdnPlaylist },
+  "/cdn.m3u": { filename: "cdn.m3u", generator: generateCdnPlaylist },
+  "/cdnlivetv": { filename: "cdn.m3u", generator: generateCdnPlaylist },
+  "/cdnlivetv.m3u": { filename: "cdn.m3u", generator: generateCdnPlaylist },
 
   "/pit": { filename: "pit.m3u", generator: generatePitPlaylist },
   "/pit.m3u": { filename: "pit.m3u", generator: generatePitPlaylist },

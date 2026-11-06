@@ -11,6 +11,8 @@ const {
   generateDamPlaylist,
   generateSports247Playlist,
   generateChannel4Playlist,
+  generateChannel5Playlist,
+  generateCdnPlaylist,
   generateCombinedPlaylist,
 } = require("./generate");
 const config = require("./config");
@@ -125,6 +127,20 @@ async function runTest() {
     const channel4Count = (channel4Content.match(/#EXTINF/g) || []).length;
     console.log(`✅ Sports247 /channel4 playlist generated: ${channel4Count} channels.`);
     fs.writeFileSync("test-channel4.m3u", channel4Content);
+
+    // 8f. Channel5: CDN Live TV 24/7 Channels (/channel5)
+    console.log("\n=== Step 8f: Testing CDN Live TV Channels (generateChannel5Playlist) ===");
+    const channel5Content = await generateChannel5Playlist();
+    const channel5Count = (channel5Content.match(/#EXTINF/g) || []).length;
+    console.log(`✅ CDN Live TV /channel5 playlist generated: ${channel5Count} channels.`);
+    fs.writeFileSync("test-channel5.m3u", channel5Content);
+
+    // 8g. CDN: CDN Live Sports Events (/cdn)
+    console.log("\n=== Step 8g: Testing CDN Live Events (generateCdnPlaylist) ===");
+    const cdnContent = await generateCdnPlaylist();
+    const cdnCount = (cdnContent.match(/#EXTINF/g) || []).length;
+    console.log(`✅ CDN Live Events /cdn playlist generated: ${cdnCount} streams.`);
+    fs.writeFileSync("test-cdn.m3u", cdnContent);
 
     // 9. Combined Provider
     console.log("\n=== Step 9: Testing Combined Provider (generateCombinedPlaylist) ===");

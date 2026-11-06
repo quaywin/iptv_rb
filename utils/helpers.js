@@ -322,6 +322,7 @@ const PROVIDER_MIRRORS = {
   sportsbite: ["https://sportsbite.org", "https://sportsbite.to", "https://sportsbite.st", "https://sportsbite.net"],
   vidcdn: ["https://vidcdn.vip", "https://vidcdn.st", "https://vidcdn.to", "https://vidcdn.is"],
   matchora: ["https://matchora.to", "https://matchora.pro", "https://es.matchora.pro", "https://matchora.net"],
+  cdnlivetv: ["https://api.cdnlivetv.tv", "https://cdnlivetv.tv"],
 };
 
 /**
@@ -507,6 +508,19 @@ function mergeConfig(customConfig = {}) {
   for (const [k, v] of Object.entries(customConfig)) {
     if (v !== undefined && v !== null && v !== "") {
       cleanCustom[k] = v;
+      // Map UPPERCASE_SNAKE_CASE environment variables to camelCase config keys
+      if (k === "SPORTS247_SCRAPE_SERVICE_URL") cleanCustom.sports247ScrapeServiceUrl = v;
+      if (k === "SCRAPE_SERVICE_URL") cleanCustom.scrapeServiceUrl = v;
+      if (k === "STRM_SCRAPE_SERVICE_URL") cleanCustom.strmScrapeServiceUrl = v;
+      if (k === "CINE_SCRAPE_SERVICE_URL") cleanCustom.cineScrapeServiceUrl = v;
+      if (k === "DAM_SCRAPE_SERVICE_URL") cleanCustom.damScrapeServiceUrl = v;
+      if (k === "CDN_SCRAPE_SERVICE_URL") cleanCustom.cdnScrapeServiceUrl = v;
+      if (k === "CDN_CHANNELS_URL") cleanCustom.cdnChannelsUrl = v;
+      if (k === "PPV_API_URL") cleanCustom.ppvApiUrl = v;
+      if (k === "XTREAM_PASSWORD") cleanCustom.xtreamPassword = v;
+      if (k === "XTREAM_USERS") cleanCustom.xtreamUsers = v;
+      if (k === "TIMEZONE") cleanCustom.timezone = v;
+      if (k === "EMBED_BASE_URL") cleanCustom.embedBaseUrl = v;
     }
   }
   return { ...config, ...cleanCustom };

@@ -6,6 +6,8 @@ const {
   generateSportsbitePlaylist,
   generateChannel3Playlist,
   generateChannel4Playlist,
+  generateChannel5Playlist,
+  generateCdnPlaylist,
   generateGkPlaylist,
   generatePitPlaylist,
   generateCinePlaylist,
@@ -14,6 +16,17 @@ const {
   generateCombinedPlaylist,
 } = require("./generate");
 const defaultConfig = require("./config");
+const {
+  isAllCategory,
+  getVodCategories,
+  getVodStreams,
+  getVodInfo,
+  getSeriesCategories,
+  getSeriesStreams,
+  getSeriesInfo,
+  buildVodResolverUrl,
+  buildSeriesResolverUrl,
+} = require("./providers/tmdb");
 
 // Map alias -> Provider definition
 const PROVIDER_MAP = {
@@ -43,6 +56,14 @@ const PROVIDER_MAP = {
   channel4: { filename: "channel4.m3u", generator: generateChannel4Playlist, title: "Sports247 24/7 Channels" },
   c4: { filename: "channel4.m3u", generator: generateChannel4Playlist, title: "Sports247 24/7 Channels" },
   "sports247-channels": { filename: "channel4.m3u", generator: generateChannel4Playlist, title: "Sports247 24/7 Channels" },
+
+  // Channel 5 (CDN Live TV 24/7 channels)
+  channel5: { filename: "channel5.m3u", generator: generateChannel5Playlist, title: "CDN Live TV 24/7 Channels" },
+  c5: { filename: "channel5.m3u", generator: generateChannel5Playlist, title: "CDN Live TV 24/7 Channels" },
+
+  // CDN Live Events
+  cdn: { filename: "cdn.m3u", generator: generateCdnPlaylist, title: "CDN Live Sports Events" },
+  cdnlivetv: { filename: "cdn.m3u", generator: generateCdnPlaylist, title: "CDN Live Sports Events" },
 
   // Sports247 Live Events
   "247": { filename: "247.m3u", generator: generateSports247Playlist, title: "Sports247 Live Events" },
@@ -314,8 +335,13 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  // 1. Handle /player_api.php
-  if (pathname === "/player_api.php" || pathname.endsWith("/player_api.php")) {
+  // 1. Handle /player_api.php (and /panel_api.php legacy)
+  if (
+    pathname === "/player_api.php" ||
+    pathname.endsWith("/player_api.php") ||
+    pathname === "/panel_api.php" ||
+    pathname.endsWith("/panel_api.php")
+  ) {
     let params = url.searchParams;
 
     // Parse form-data or JSON body on POST requests
@@ -341,8 +367,8 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       }
     }
 
-    const username = getParam(params, "username");
-    const password = getParam(params, "password");
+    const username = getParam(params, "username") || getParam(params, "u");
+    const password = getParam(params, "password") || getParam(params, "p");
     const action = getParam(params, "action");
 
     const auth = authenticateUser(username, password, config);
@@ -375,7 +401,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
           active_cons: "0",
           created_at: "1600000000",
           max_connections: "5",
-          allowed_output_formats: ["m3u8", "ts", "rtmp"],
+          allowed_output_formats: ["m3u8", "ts", "rtmp", "mp4", "mkv", "avi"],
         },
         server_info: {
           url: host,
@@ -410,7 +436,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     if (action === "get_live_streams") {
       const catId = getParam(params, "category_id");
       let streams = [];
-      if (catId && catId !== "0" && xtreamData?.categoryStreams) {
+      if (!isAllCategory(catId) && xtreamData?.categoryStreams) {
         streams = xtreamData.categoryStreams.get(catId) || [];
       } else {
         streams = xtreamData?.streams || [];
@@ -422,17 +448,104 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       });
     }
 
-    // Action: VOD and Series (Empty placeholders for pure live sports / channels)
-    if (
-      action === "get_vod_categories" ||
-      action === "get_vod_streams" ||
-      action === "get_vod_info" ||
-      action === "get_series_categories" ||
-      action === "get_series" ||
-      action === "get_series_info"
-    ) {
-      const emptyPayload = (action === "get_vod_info" || action === "get_series_info") ? {} : [];
-      return Response.json(emptyPayload, {
+    // Action: VOD Movie Categories
+    if (action === "get_vod_categories") {
+      const categories = await getVodCategories(config?.tmdbApiKey);
+      return Response.json(categories, {
+        status: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+      });
+    }
+
+    // Action: VOD Movie Streams
+    if (action === "get_vod_streams") {
+      const catId = getParam(params, "category_id");
+      const pageRaw = getParam(params, "page");
+      const hasPageParam = pageRaw !== null && pageRaw !== undefined && pageRaw !== "";
+      const page = parseInt(pageRaw || "1", 10) || 1;
+      const search = getParam(params, "search") || getParam(params, "query") || getParam(params, "q") || getParam(params, "keyword") || getParam(params, "name") || getParam(params, "title") || getParam(params, "context") || "";
+      const streams = await getVodStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
+      return Response.json(streams, {
+        status: 200,
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Page": String(page),
+          "X-Per-Page": "20",
+        },
+      });
+    }
+
+    // Action: VOD Info
+    if (action === "get_vod_info") {
+      const vodId = getParam(params, "vod_id") || getParam(params, "stream_id");
+      if (!vodId) {
+        return Response.json({}, { status: 200, headers: CORS_HEADERS });
+      }
+      const info = await getVodInfo(vodId, config?.tmdbApiKey);
+      return Response.json(info, {
+        status: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+      });
+    }
+
+    // Action: Series Categories
+    if (action === "get_series_categories") {
+      const categories = await getSeriesCategories(config?.tmdbApiKey);
+      return Response.json(categories, {
+        status: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+      });
+    }
+
+    // Action: Series Streams (supports get_series and get_series_streams alias)
+    if (action === "get_series" || action === "get_series_streams") {
+      const catId = getParam(params, "category_id");
+      const pageRaw = getParam(params, "page");
+      const hasPageParam = pageRaw !== null && pageRaw !== undefined && pageRaw !== "";
+      const page = parseInt(pageRaw || "1", 10) || 1;
+      const search = getParam(params, "search") || getParam(params, "query") || getParam(params, "q") || getParam(params, "keyword") || getParam(params, "name") || getParam(params, "title") || getParam(params, "context") || "";
+      const series = await getSeriesStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
+      return Response.json(series, {
+        status: 200,
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Page": String(page),
+          "X-Per-Page": "20",
+        },
+      });
+    }
+
+    // Action: Search (search / search_vod / search_series)
+    if (action === "search" || action === "search_vod" || action === "search_series") {
+      const type = (getParam(params, "type") || "").toLowerCase();
+      const query = getParam(params, "search") || getParam(params, "query") || getParam(params, "q") || getParam(params, "context") || getParam(params, "keyword") || "";
+      const page = parseInt(getParam(params, "page") || "1", 10) || 1;
+
+      if (action === "search_series" || type === "series" || type === "tv") {
+        const series = await getSeriesStreams(null, config?.tmdbApiKey, page, query, true);
+        return Response.json(series, {
+          status: 200,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8", "X-Page": String(page), "X-Per-Page": "20" },
+        });
+      }
+
+      const streams = await getVodStreams(null, config?.tmdbApiKey, page, query, true);
+      return Response.json(streams, {
+        status: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8", "X-Page": String(page), "X-Per-Page": "20" },
+      });
+    }
+
+    // Action: Series Info
+    if (action === "get_series_info") {
+      const seriesId = getParam(params, "series_id") || getParam(params, "stream_id");
+      if (!seriesId) {
+        return Response.json({}, { status: 200, headers: CORS_HEADERS });
+      }
+      const info = await getSeriesInfo(seriesId, config?.tmdbApiKey);
+      return Response.json(info, {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
       });
@@ -492,10 +605,82 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     }
   }
 
-  // 3. Handle /get.php (Download M3U Playlist via Xtream credentials)
+  // 3. Handle /movie/:username/:password/:streamId or /vod/:username/:password/:streamId (.mp4 | .mkv | .m3u8 | raw id)
+  if (pathname.startsWith("/movie/") || pathname.startsWith("/vod/")) {
+    const parts = url.pathname.split("/").filter(Boolean); // ['movie', username, password, streamId]
+    if (parts.length >= 4) {
+      const username = parts[1];
+      const password = parts[2];
+      const rawStream = parts[3];
+
+      const streamIdMatch = rawStream.match(/^(\d+)/);
+      if (!streamIdMatch) {
+        return new Response("Invalid movie id", { status: 400, headers: CORS_HEADERS });
+      }
+
+      const streamId = parseInt(streamIdMatch[1], 10);
+      const auth = authenticateUser(username, password, config);
+      if (!auth.valid) {
+        return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
+      }
+
+      // Build target video resolver URL
+      const targetUrl = buildVodResolverUrl(streamId, config?.vodResolverUrl);
+
+      return new Response(null, {
+        status: 302,
+        headers: {
+          ...CORS_HEADERS,
+          Location: targetUrl,
+        },
+      });
+    }
+  }
+
+  // 4. Handle /series/:username/:password/:episodeId (.mp4 | .mkv | .m3u8 | raw id)
+  if (pathname.startsWith("/series/")) {
+    const parts = url.pathname.split("/").filter(Boolean); // ['series', username, password, episodeId]
+    if (parts.length >= 4) {
+      const username = parts[1];
+      const password = parts[2];
+      const rawStream = parts[3];
+
+      const epIdMatch = rawStream.match(/^(\d+)/);
+      if (!epIdMatch) {
+        return new Response("Invalid episode id", { status: 400, headers: CORS_HEADERS });
+      }
+
+      const episodeId = parseInt(epIdMatch[1], 10);
+      const auth = authenticateUser(username, password, config);
+      if (!auth.valid) {
+        return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
+      }
+
+      // Decode seriesId, season, and episode from encoded integer:
+      // epId = seriesId * 10000 + (season % 100) * 100 + (epNumber % 100)
+      // seriesId keeps its full width (see providers/tmdb.js) so shows with
+      // TMDB ids >= 100000 resolve to the correct series.
+      const epNum = episodeId % 100;
+      const sNum = Math.floor((episodeId % 10000) / 100);
+      const seriesId = Math.floor(episodeId / 10000);
+
+      // Build target series video resolver URL
+      const targetUrl = buildSeriesResolverUrl(seriesId, sNum, epNum, config?.seriesResolverUrl);
+
+      return new Response(null, {
+        status: 302,
+        headers: {
+          ...CORS_HEADERS,
+          Location: targetUrl,
+        },
+      });
+    }
+  }
+
+  // 5. Handle /get.php (Download M3U Playlist via Xtream credentials)
   if (pathname === "/get.php" || pathname.endsWith("/get.php")) {
-    const username = url.searchParams.get("username");
-    const password = url.searchParams.get("password");
+    const username = url.searchParams.get("username") || url.searchParams.get("u");
+    const password = url.searchParams.get("password") || url.searchParams.get("p");
 
     const auth = authenticateUser(username, password, config);
     if (!auth.valid) {

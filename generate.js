@@ -10,6 +10,8 @@ const { generateChannel3Playlist, fetchChannel3List, getVidcdnChannelCountry } =
 const { generateDamPlaylist, fetchDamStreamList, generateOndemandPlaylist } = require("./providers/dam");
 const { generateSports247Playlist, fetchSports247Events } = require("./providers/sports247");
 const { generateChannel4Playlist, fetchSports247Channels, getSports247ChannelCountry } = require("./providers/channel4");
+const { generateChannel5Playlist, fetchCdnChannelsList, getCdnChannelCountry } = require("./providers/channel5");
+const { generateCdnPlaylist, fetchCdnEventsList } = require("./providers/cdn");
 
 /**
  * Generate combined playlist from all providers
@@ -23,7 +25,7 @@ async function generateCombinedPlaylist(customConfig = {}) {
     return generator(customConfig);
   };
 
-  const [strm, ppv, timLive, timChannels, channel2, channel3, gk, pit, cine, dam, s247, channel4] = await Promise.all([
+  const [strm, ppv, timLive, timChannels, channel2, channel3, gk, pit, cine, dam, s247, channel4, channel5, cdn] = await Promise.all([
     getSub("strm.m3u", generateStrmPlaylist).catch(e => {
       console.error("STRM error in combined:", e.message);
       return "";
@@ -72,9 +74,17 @@ async function generateCombinedPlaylist(customConfig = {}) {
       console.error("Channel4 error in combined:", e.message);
       return "";
     }),
+    getSub("channel5.m3u", generateChannel5Playlist).catch(e => {
+      console.error("Channel5 error in combined:", e.message);
+      return "";
+    }),
+    getSub("cdn.m3u", generateCdnPlaylist).catch(e => {
+      console.error("CDN Events error in combined:", e.message);
+      return "";
+    }),
   ]);
 
-  const parts = [strm, ppv, timLive, timChannels, channel2, channel3, gk, pit, cine, dam, s247, channel4]
+  const parts = [strm, ppv, timLive, timChannels, channel2, channel3, gk, pit, cine, dam, s247, channel4, channel5, cdn]
     .map(p => (p || "").replace(/^#EXTM3U[^\n]*\n+/i, "").trim())
     .filter(Boolean);
 
@@ -96,6 +106,8 @@ module.exports = {
   generateVidcdnPlaylist: generateChannel3Playlist,
   generateChannel4Playlist,
   generateSports247ChannelsPlaylist: generateChannel4Playlist,
+  generateChannel5Playlist,
+  generateCdnPlaylist,
   generateGkPlaylist,
   generatePitPlaylist,
   generateCinePlaylist,
@@ -112,6 +124,9 @@ module.exports = {
   fetchVidcdnChannelsList: fetchChannel3List,
   fetchChannel3List,
   fetchSports247Channels,
+  fetchCdnChannelsList,
+  fetchChannel5List: fetchCdnChannelsList,
+  fetchCdnEventsList,
   fetchTimStreamList,
   resolveTimEventStream,
   fetchGkStreamList,
@@ -122,4 +137,5 @@ module.exports = {
   getChannelCountry,
   getVidcdnChannelCountry,
   getSports247ChannelCountry,
+  getCdnChannelCountry,
 };

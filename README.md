@@ -37,6 +37,8 @@ A Bun-based high-performance IPTV solution that automatically generates playlist
   - `dam.js`: Handler for `ondemand.st` (DAMITV live sports & 24/7 channels).
   - `sports247.js`: Handler for `en.sports247.ru` / Matchora API (Live sports events & multi-server matchora embeds).
   - `channel4.js`: Handler for `en.sports247.ru/channels` / Matchora API (2,700+ 24/7 TV channels across 63 countries).
+  - `channel5.js`: Handler for `cdnlivetv.tv` / CDN Live TV 24/7 channels across 30+ countries.
+  - `cdn.js`: Handler for `cdnlivetv.tv` / CDN Live TV live sports events & schedule.
 - `utils/helpers.js`: Shared formatting, icon mappings, timezone conversions, and config merging.
 - `generate.js`: Unified orchestrator combining all provider modules into single/combined playlists.
 - `routes.js`: Centralized route-to-generator mappings used across Bun server and Cloudflare Pages.
@@ -158,6 +160,18 @@ Add the playlist URL to your favorite IPTV player (TiviMate, VLC, OTT Navigator)
   ```
   *(or `/channel4.m3u`, `/sports247-channels`)*
 
+- **CDN Live TV 24/7 Channels** (`cdnlivetv.tv`):
+  ```text
+  https://iptv-140.pages.dev/channel5
+  ```
+  *(or `/channel5.m3u`)*
+
+- **CDN Live Sports Events** (`cdnlivetv.tv/api/v1/events/sports`):
+  ```text
+  https://iptv-140.pages.dev/cdn
+  ```
+  *(or `/cdn.m3u`, `/cdnlivetv`)*
+
 - **Combined Playlist** (All providers):
   ```text
   https://iptv-140.pages.dev/all
@@ -182,6 +196,8 @@ When adding a playlist via **Xtream Codes Parameters**:
 | :--- | :--- | :--- |
 | **STRM Sports** | `strm` *(or `stream`)* | Live sports events across 9 sports with 1080p mirrors |
 | **Sports247 TV (24/7)** | `channel4` *(or `c4`)* | 2,750+ 24/7 channels grouped by 56+ countries |
+| **CDN Live TV (24/7)** | `channel5` *(or `c5`)* | CDN Live TV 24/7 channels across 30+ countries |
+| **CDN Live Events** | `cdn` *(or `cdnlivetv`)* | CDN Live TV sports events & schedules |
 | **SportsBite Channels** | `channel2` *(or `sportsbite`)* | 830+ 24/7 channels grouped by 47 countries |
 | **VidCDN Channels** | `channel3` *(or `vidcdn`)* | 980+ 24/7 TV channels grouped by 48+ countries |
 | **Sports247 Events** | `247` *(or `sports247`)* | Live match events & multi-server matchora embeds |
@@ -204,6 +220,26 @@ XTREAM_PASSWORD=iptv
 # Optional: Map custom usernames to specific providers
 # Format: username:password:provider,username2:password2:provider2
 XTREAM_USERS=sports_fan:mysecret:strm,my_tv:pass123:channel4,vip_user:pass999:all
+```
+
+---
+
+## 🎬 VOD (Movies) & TV Series (Shows)
+
+The Xtream Codes API now includes full support for **Movies (VOD)** and **TV Series**:
+- **Metadata Provider**: TMDb (The Movie Database) with Vietnamese localization (`vi-VN`), poster art, cast, overview, and seasons/episodes breakdown.
+- **Video Resolver**: Configurable proxy stream templates with automatic redirection (`HTTP 302`):
+  - **Movies**: `/movie/:username/:password/:streamId.mp4` -> resolves via `VOD_RESOLVER_URL`
+  - **TV Series**: `/series/:username/:password/:episodeId.mp4` -> resolves via `SERIES_RESOLVER_URL`
+  - **No `proxy=true`**: the resolver 302s straight to the resolved stream instead of relaying chunks through the proxy.
+  - **Backup mirrors**: `scrape-video` supports a `fallback` param (retries a backup page when the primary yields no source), but VidSrc-style mirrors (e.g. `player.videasy.ws`) block datacenter IPs and issue IP-bound stream tokens, so they can't serve clients via direct 302 — no backup is configured by default.
+
+### Resolver Configuration
+In `.env`:
+```env
+TMDB_API_KEY=your_tmdb_api_key_here
+VOD_RESOLVER_URL=https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fvidnest.fun%2Fmovie%2F{tmdbId}
+SERIES_RESOLVER_URL=https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fvidnest.fun%2Ftv%2F{tmdbId}%2F{season}%2F{episode}
 ```
 
 ---

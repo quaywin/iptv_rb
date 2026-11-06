@@ -24,6 +24,9 @@ const config = {
   sports247Url: env.SPORTS247_URL || "https://en.sports247.ru",
   matchoraApiUrl: env.MATCHORA_API_URL || "https://matchora.to/api/v1",
   sports247ScrapeServiceUrl: env.SPORTS247_SCRAPE_SERVICE_URL || env.DAM_SCRAPE_SERVICE_URL || env.SCRAPE_SERVICE_URL || "",
+  cdnChannelsUrl: env.CDN_CHANNELS_URL || "https://api.cdnlivetv.tv/api/v1/channels/?user=cdnlivetv&plan=free",
+  cdnEventsUrl: env.CDN_EVENTS_URL || "https://api.cdnlivetv.tv/api/v1/events/sports/?user=cdnlivetv&plan=free",
+  cdnScrapeServiceUrl: env.CDN_SCRAPE_SERVICE_URL || env.SPORTS247_SCRAPE_SERVICE_URL || env.DAM_SCRAPE_SERVICE_URL || env.SCRAPE_SERVICE_URL || "",
   scrapeServiceUrl: env.SCRAPE_SERVICE_URL || "",
   strmScrapeServiceUrl: env.STRM_SCRAPE_SERVICE_URL || env.SCRAPE_SERVICE_URL || "",
   cineScrapeServiceUrl: env.CINE_SCRAPE_SERVICE_URL || env.SCRAPE_SERVICE_URL || "",
@@ -36,10 +39,14 @@ const config = {
   timeout: getInt(env.TIMEOUT, 5000),
   hoursBack: getInt(env.HOURS_BACK, 4),
   hoursAhead: getInt(env.HOURS_AHEAD, 24),
+  cdnHoursAhead: getInt(env.CDN_HOURS_AHEAD, 72),
   maxChannelsPerEvent: env.MAX_CHANNELS_PER_EVENT !== undefined ? parseInt(env.MAX_CHANNELS_PER_EVENT, 10) : 4,
   timezone: env.TIMEZONE || "Asia/Ho_Chi_Minh",
   xtreamPassword: env.XTREAM_PASSWORD !== undefined ? env.XTREAM_PASSWORD : "iptv",
   xtreamUsers: env.XTREAM_USERS || "",
+  tmdbApiKey: env.TMDB_API_KEY || "",
+  vodResolverUrl: env.VOD_RESOLVER_URL || "",
+  seriesResolverUrl: env.SERIES_RESOLVER_URL || "",
 };
 
 module.exports = config;
