@@ -64,15 +64,19 @@ async function fetchTmdb(endpoint, params = {}, apiKey = DEFAULT_TMDB_API_KEY, t
 const VOD_CATEGORIES = [
   { category_id: "2026", category_name: "Phim Chiếu Rạp 2026", parent_id: 0, query: { primary_release_year: "2026", sort_by: "popularity.desc" } },
   { category_id: "1001", category_name: "Phim Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
-  { category_id: "2025", category_name: "Phim 2025", parent_id: 0, query: { primary_release_year: "2025", sort_by: "popularity.desc" } },
-  { category_id: "2024", category_name: "Phim 2024", parent_id: 0, query: { primary_release_year: "2024", sort_by: "popularity.desc" } },
-  { category_id: "2023", category_name: "Phim 2023", parent_id: 0, query: { primary_release_year: "2023", sort_by: "popularity.desc" } },
+  { category_id: "2025", category_name: "Phim 2025 (Nổi Bật)", parent_id: 0, query: { primary_release_year: "2025", sort_by: "popularity.desc" } },
+  { category_id: "2024", category_name: "Phim 2024 (Nổi Bật)", parent_id: 0, query: { primary_release_year: "2024", sort_by: "popularity.desc" } },
+  { category_id: "2023", category_name: "Phim 2023 (Nổi Bật)", parent_id: 0, query: { primary_release_year: "2023", sort_by: "popularity.desc" } },
   { category_id: "1002", category_name: "Phim Netflix", parent_id: 0, query: { with_watch_providers: "8", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1003", category_name: "Phim HBO Max", parent_id: 0, query: { with_watch_providers: "1899|384", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1008", category_name: "Phim Amazon Prime", parent_id: 0, query: { with_watch_providers: "9|119", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1009", category_name: "Phim Paramount+", parent_id: 0, query: { with_watch_providers: "531|2303|2616|582", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1010", category_name: "Phim Hulu", parent_id: 0, query: { with_watch_providers: "15", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1004", category_name: "Phim Disney+", parent_id: 0, query: { with_watch_providers: "337", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1005", category_name: "Phim Apple TV+", parent_id: 0, query: { with_watch_providers: "350", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1006", category_name: "Phim Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "1000" } },
   { category_id: "1007", category_name: "Phim Hoạt Hình Chiếu Rạp", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
+  { category_id: "1011", category_name: "Phim Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
 ];
 
 /**
@@ -144,22 +148,48 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
       const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
       results = json?.results || [];
     } else if (!isAllCategory(categoryId)) {
-      // Specific category: fetch 10 pages (~200 movies)
-      const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
-      if (catDef) {
-        Object.assign(baseParams, catDef.query);
+      const yearStr = String(categoryId);
+      if (["2026", "2025", "2024", "2023"].includes(yearStr)) {
+        // Multi-angle query for ALL notable blockbusters of the year:
+        // 1. Box Office leaders (revenue.desc)
+        // 2. Most reviewed/voted by audience (vote_count.desc)
+        // 3. Trending/popular releases (popularity.desc)
+        const [revPages, votePages, popPages] = await Promise.all([
+          Promise.all([1, 2, 3, 4].map(p => fetchTmdb(endpoint, { primary_release_year: yearStr, sort_by: "revenue.desc", page: String(p) }, apiKey))),
+          Promise.all([1, 2, 3, 4].map(p => fetchTmdb(endpoint, { primary_release_year: yearStr, sort_by: "vote_count.desc", page: String(p) }, apiKey))),
+          Promise.all([1, 2, 3, 4].map(p => fetchTmdb(endpoint, { primary_release_year: yearStr, sort_by: "popularity.desc", "vote_count.gte": yearStr >= "2025" ? "10" : "50", page: String(p) }, apiKey))),
+        ]);
+
+        const rawList = [
+          ...revPages.flatMap(r => r?.results || []),
+          ...votePages.flatMap(r => r?.results || []),
+          ...popPages.flatMap(r => r?.results || []),
+        ];
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
       } else {
-        baseParams.with_genres = String(categoryId);
-      }
-      const responses = await Promise.all(
-        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
-      );
-      const rawList = responses.flatMap(r => r?.results || []);
-      const seen = new Set();
-      for (const item of rawList) {
-        if (item?.id && !seen.has(item.id)) {
-          seen.add(item.id);
-          results.push(item);
+        // Specific platform or genre category: fetch 10 pages (~200 movies)
+        const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
+        if (catDef) {
+          Object.assign(baseParams, catDef.query);
+        } else {
+          baseParams.with_genres = String(categoryId);
+        }
+        const responses = await Promise.all(
+          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
+        );
+        const rawList = responses.flatMap(r => r?.results || []);
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
         }
       }
     } else {
@@ -290,14 +320,18 @@ async function getVodInfo(tmdbId, apiKey) {
 const SERIES_CATEGORIES = [
   { category_id: "2026", category_name: "Series 2026", parent_id: 0, query: { first_air_date_year: "2026", sort_by: "popularity.desc" } },
   { category_id: "1001", category_name: "Series Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
-  { category_id: "2025", category_name: "Series 2025", parent_id: 0, query: { first_air_date_year: "2025", sort_by: "popularity.desc" } },
-  { category_id: "2024", category_name: "Series 2024", parent_id: 0, query: { first_air_date_year: "2024", sort_by: "popularity.desc" } },
+  { category_id: "2025", category_name: "Series 2025 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2025", sort_by: "popularity.desc" } },
+  { category_id: "2024", category_name: "Series 2024 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2024", sort_by: "popularity.desc" } },
   { category_id: "1002", category_name: "Series Netflix", parent_id: 0, query: { with_watch_providers: "8", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1003", category_name: "Series HBO Max", parent_id: 0, query: { with_watch_providers: "1899|384", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1008", category_name: "Series Amazon Prime", parent_id: 0, query: { with_watch_providers: "9|119", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1009", category_name: "Series Paramount+", parent_id: 0, query: { with_watch_providers: "531|2303|2616|582", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1010", category_name: "Series Hulu", parent_id: 0, query: { with_watch_providers: "15", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1004", category_name: "Series Disney+", parent_id: 0, query: { with_watch_providers: "337", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1005", category_name: "Series Apple TV+", parent_id: 0, query: { with_watch_providers: "350", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1006", category_name: "Series Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "500" } },
   { category_id: "1007", category_name: "Series Anime / Hoạt Hình", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
+  { category_id: "1011", category_name: "Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
 ];
 
 /**
@@ -353,31 +387,54 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
       const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
       results = json?.results || [];
     } else if (!isAllCategory(categoryId)) {
-      // Specific category: fetch 10 pages (~200 series)
-      const catDef = SERIES_CATEGORIES.find(c => c.category_id === String(categoryId));
-      if (catDef) {
-        Object.assign(baseParams, catDef.query);
-      } else {
-        baseParams.with_genres = String(categoryId);
-      }
-      const responses = await Promise.all(
-        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
-      );
-      const rawList = responses.flatMap(r => r?.results || []);
-      const seen = new Set();
-      for (const item of rawList) {
-        if (item?.id && !seen.has(item.id)) {
-          seen.add(item.id);
-          results.push(item);
-        }
-      }
+      const yearStr = String(categoryId);
+      if (["2026", "2025", "2024"].includes(yearStr)) {
+        // Multi-angle query for ALL notable series of the year:
+        // 1. Most voted series (vote_count.desc)
+        // 2. High popularity trending series (popularity.desc)
+        const [votePages, popPages] = await Promise.all([
+          Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { first_air_date_year: yearStr, sort_by: "vote_count.desc", page: String(p) }, apiKey))),
+          Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { first_air_date_year: yearStr, sort_by: "popularity.desc", "vote_count.gte": "10", page: String(p) }, apiKey))),
+        ]);
 
-      // If Peacock category, ensure Poker Face (120998) is always included
-      if (String(categoryId) === "1001" && !seen.has(120998)) {
-        try {
-          const pf = await fetchTmdb("/tv/120998", {}, apiKey);
-          if (pf?.id) results.unshift(pf);
-        } catch (_) {}
+        const rawList = [
+          ...votePages.flatMap(r => r?.results || []),
+          ...popPages.flatMap(r => r?.results || []),
+        ];
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
+      } else {
+        // Specific platform or genre category: fetch 10 pages (~200 series)
+        const catDef = SERIES_CATEGORIES.find(c => c.category_id === String(categoryId));
+        if (catDef) {
+          Object.assign(baseParams, catDef.query);
+        } else {
+          baseParams.with_genres = String(categoryId);
+        }
+        const responses = await Promise.all(
+          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
+        );
+        const rawList = responses.flatMap(r => r?.results || []);
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
+
+        // If Peacock category, ensure Poker Face (120998) is always included
+        if (String(categoryId) === "1001" && !seen.has(120998)) {
+          try {
+            const pf = await fetchTmdb("/tv/120998", {}, apiKey);
+            if (pf?.id) results.unshift(pf);
+          } catch (_) {}
+        }
       }
     } else {
       // ALL category initial catalog: 2026 + Peacock + 2025 + popular series + top voted (~450+ shows)
