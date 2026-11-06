@@ -218,25 +218,41 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         }
       }
     } else {
-      // ALL category initial catalog: fetch newest 2026 cinema + Peacock + 2025 + popular blockbusters (~400+ movies)
-      const [res2026, resPeacock, res2025, resPop] = await Promise.all([
-        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/movie", { primary_release_year: "2026", sort_by: "popularity.desc", page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/movie", { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc", page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/movie", { primary_release_year: "2025", sort_by: "popularity.desc", page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb("/movie/popular", { page: String(p) }, apiKey))),
-      ]);
+      // ALL category initial catalog: fetch from each curated category so the app's local SQLite DB has items for ALL categories
+      const categoryFetches = VOD_CATEGORIES.map(async (cat) => {
+        let params = { sort_by: "popularity.desc", page: "1" };
+        if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
+          params.primary_release_year = cat.category_id;
+        } else if (cat.query) {
+          Object.assign(params, cat.query);
+        }
+        const json = await fetchTmdb("/discover/movie", params, apiKey);
+        const list = json?.results || [];
+        return list.map(item => ({ ...item, _assignedCatId: cat.category_id }));
+      });
 
-      const rawList = [
-        ...res2026.flatMap(r => r?.results || []),
-        ...resPeacock.flatMap(r => r?.results || []),
-        ...res2025.flatMap(r => r?.results || []),
-        ...resPop.flatMap(r => r?.results || []),
-      ];
+      const batches = await Promise.all(categoryFetches);
       const seen = new Set();
-      for (const item of rawList) {
-        if (item?.id && !seen.has(item.id)) {
-          seen.add(item.id);
-          results.push(item);
+      for (const batch of batches) {
+        for (const item of batch) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
+      }
+
+      // Also include extra 2026 releases & popular hits for richness
+      const [res2026, resPop] = await Promise.all([
+        Promise.all([1, 2].map(p => fetchTmdb("/discover/movie", { primary_release_year: "2026", sort_by: "popularity.desc", page: String(p) }, apiKey))),
+        Promise.all([1, 2].map(p => fetchTmdb("/movie/popular", { page: String(p) }, apiKey))),
+      ]);
+      for (const p of [...res2026, ...resPop]) {
+        for (const item of (p?.results || [])) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
         }
       }
       // Sort so newest releases stay on top
@@ -246,10 +262,10 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
     const baseNum = hasPageParam ? (page - 1) * 20 : 0;
     return results.map((m, idx) => {
       const year = m.release_date ? m.release_date.substring(0, 4) : "";
-      let primaryCatId = "2026";
+      let primaryCatId = m._assignedCatId || "2026";
       if (!isAllCategory(categoryId)) {
         primaryCatId = String(categoryId);
-      } else {
+      } else if (!m._assignedCatId) {
         if (year === "2025") primaryCatId = "2025";
         else if (year === "2024") primaryCatId = "2024";
         else if (year === "2023") primaryCatId = "2023";
@@ -267,6 +283,7 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         rating_5based: ((m.vote_average || 0) / 2).toFixed(1),
         added: m.release_date ? String(Math.floor(new Date(m.release_date).getTime() / 1000)) : "0",
         category_id: primaryCatId,
+        category_ids: [primaryCatId, year].filter(Boolean),
         container_extension: "mp4",
         custom_sid: "",
         direct_source: "",
@@ -347,6 +364,7 @@ const SERIES_CATEGORIES = [
   { category_id: "1001", category_name: "Series Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "2025", category_name: "Series 2025 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2025", sort_by: "popularity.desc" } },
   { category_id: "2024", category_name: "Series 2024 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2024", sort_by: "popularity.desc" } },
+  { category_id: "2023", category_name: "Series 2023 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2023", sort_by: "popularity.desc" } },
   { category_id: "1002", category_name: "Series Netflix", parent_id: 0, query: { with_watch_providers: "8", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1003", category_name: "Series HBO Max", parent_id: 0, query: { with_watch_providers: "1899|384", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1008", category_name: "Series Amazon Prime", parent_id: 0, query: { with_watch_providers: "9|119", watch_region: "US", sort_by: "popularity.desc" } },
@@ -465,39 +483,54 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         }
       }
     } else {
-      // ALL category initial catalog: 2026 + Peacock + 2025 + popular series + top voted (~450+ shows)
-      const [res2026, resPeacock, res2025, resPop, resTop] = await Promise.all([
-        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { first_air_date_year: "2026", sort_by: "popularity.desc", page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc", page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { first_air_date_year: "2025", sort_by: "popularity.desc", page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5, 6, 7, 8].map(p => fetchTmdb("/tv/popular", { page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { sort_by: "vote_count.desc", page: String(p) }, apiKey))),
-      ]);
+      // ALL category initial catalog: fetch from each curated category so the app's local SQLite DB has items for ALL categories
+      const categoryFetches = SERIES_CATEGORIES.map(async (cat) => {
+        let params = { sort_by: "popularity.desc", page: "1" };
+        if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
+          params.first_air_date_year = cat.category_id;
+        } else if (cat.query) {
+          Object.assign(params, cat.query);
+        }
+        const json = await fetchTmdb("/discover/tv", params, apiKey);
+        const list = json?.results || [];
+        return list.map(item => ({ ...item, _assignedCatId: cat.category_id }));
+      });
 
-      const rawList = [
-        ...res2026.flatMap(r => r?.results || []),
-        ...resPeacock.flatMap(r => r?.results || []),
-        ...res2025.flatMap(r => r?.results || []),
-        ...resPop.flatMap(r => r?.results || []),
-        ...resTop.flatMap(r => r?.results || []),
-      ];
+      const batches = await Promise.all(categoryFetches);
       const seen = new Set();
-      for (const item of rawList) {
-        if (item?.id && !seen.has(item.id)) {
-          seen.add(item.id);
-          results.push(item);
+      for (const batch of batches) {
+        for (const item of batch) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
         }
       }
 
-      // Ensure notable series like Poker Face (120998) are always included in the initial local database
+      // Ensure notable series like Poker Face (120998) are always included and tagged with Peacock (1001)
       if (!seen.has(120998)) {
         try {
           const pf = await fetchTmdb("/tv/120998", {}, apiKey);
           if (pf?.id) {
+            pf._assignedCatId = "1001";
             seen.add(pf.id);
             results.push(pf);
           }
         } catch (_) {}
+      }
+
+      // Also include extra 2026 releases & popular series for richness
+      const [res2026, resPop] = await Promise.all([
+        Promise.all([1, 2].map(p => fetchTmdb("/discover/tv", { first_air_date_year: "2026", sort_by: "popularity.desc", page: String(p) }, apiKey))),
+        Promise.all([1, 2].map(p => fetchTmdb("/tv/popular", { page: String(p) }, apiKey))),
+      ]);
+      for (const p of [...res2026, ...resPop]) {
+        for (const item of (p?.results || [])) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
       }
 
       results.sort((a, b) => new Date(b.first_air_date || 0) - new Date(a.first_air_date || 0));
@@ -506,13 +539,14 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
     const baseNum = hasPageParam ? (page - 1) * 20 : 0;
     return results.map((s, idx) => {
       const year = s.first_air_date ? s.first_air_date.substring(0, 4) : "";
-      let primaryCatId = "2026";
+      let primaryCatId = s._assignedCatId || "2026";
       if (!isAllCategory(categoryId)) {
         primaryCatId = String(categoryId);
-      } else {
+      } else if (!s._assignedCatId) {
         if (year === "2025") primaryCatId = "2025";
         else if (year === "2024") primaryCatId = "2024";
-        else if (parseInt(year, 10) < 2024) primaryCatId = "1006";
+        else if (year === "2023") primaryCatId = "2023";
+        else if (parseInt(year, 10) < 2023) primaryCatId = "1006";
       }
       const airDateTs = s.first_air_date
         ? String(Math.floor(new Date(s.first_air_date).getTime() / 1000))
@@ -528,6 +562,8 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         series_id: s.id, // 32-bit tmdbId
         cover: iconUrl,
         stream_icon: iconUrl,
+        category_id: primaryCatId,
+        category_ids: [primaryCatId, year].filter(Boolean),
         plot: s.overview || "",
         cast: "",
         director: "",
