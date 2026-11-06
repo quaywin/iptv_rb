@@ -531,20 +531,9 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
         });
       }
 
-      if (action === "search_vod" || type === "vod" || type === "movie") {
-        const streams = await getVodStreams(null, config?.tmdbApiKey, page, query, true);
-        return Response.json(streams, {
-          status: 200,
-          headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8", "X-Page": String(page), "X-Per-Page": "20" },
-        });
-      }
-
-      // General action=search without specific type: search both Movies (VOD) and TV Series
-      const [streams, series] = await Promise.all([
-        getVodStreams(null, config?.tmdbApiKey, page, query, true),
-        getSeriesStreams(null, config?.tmdbApiKey, page, query, true),
-      ]);
-      return Response.json([...streams, ...series], {
+      // Default search: VOD (movies) only - strict separation between VOD and Series schemas
+      const streams = await getVodStreams(null, config?.tmdbApiKey, page, query, true);
+      return Response.json(streams, {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8", "X-Page": String(page), "X-Per-Page": "20" },
       });
