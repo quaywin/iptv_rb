@@ -149,10 +149,10 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         }
       }
     } else {
-      // ALL category initial catalog: fetch newest releases + popular blockbusters (~260+ movies)
+      // ALL category initial catalog: fetch newest releases + popular blockbusters (~360+ movies)
       const [newestRes, popularRes] = await Promise.all([
         Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb("/movie/popular", { page: String(p) }, apiKey))),
+        Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(p => fetchTmdb("/movie/popular", { page: String(p) }, apiKey))),
       ]);
 
       const rawList = [...newestRes.flatMap(r => r?.results || []), ...popularRes.flatMap(r => r?.results || [])];
@@ -332,10 +332,10 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         }
       }
     } else {
-      // ALL category initial catalog: fetch newest releases + popular TV series (~280+ shows)
+      // ALL category initial catalog: fetch newest releases + popular TV series (~380+ shows)
       const [newestRes, popularRes] = await Promise.all([
         Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb("/tv/popular", { page: String(p) }, apiKey))),
+        Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(p => fetchTmdb("/tv/popular", { page: String(p) }, apiKey))),
       ]);
 
       const rawList = [...newestRes.flatMap(r => r?.results || []), ...popularRes.flatMap(r => r?.results || [])];
