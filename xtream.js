@@ -354,6 +354,9 @@ const CORS_HEADERS = {
 async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGeneratePlaylist }) {
   const pathname = url.pathname.toLowerCase();
   const method = req.method ? req.method.toUpperCase() : "GET";
+  const userAgent = req.headers.get("user-agent") || "none";
+  const clientIp = req.headers.get("cf-connecting-ip") || req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
+  const timeStr = new Date().toISOString().substring(11, 19);
 
   if (method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -395,8 +398,17 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     const password = getParam(params, "password") || getParam(params, "p");
     const action = getParam(params, "action");
 
+    // Mask password in logs
+    const safeParams = {};
+    for (const [k, v] of params.entries()) {
+      safeParams[k] = (k.toLowerCase() === "password" || k.toLowerCase() === "p") ? "***" : v;
+    }
+    console.log(`[XTREAM ${timeStr}] 📥 ${method} ${pathname} | App: "${userAgent}"${clientIp ? " | IP: " + clientIp : ""}`);
+    console.log(`[XTREAM ${timeStr}] 🔍 Action: "${action || "auth"}" | User: "${username || ""}" | Params:`, JSON.stringify(safeParams));
+
     const auth = authenticateUser(username, password, config);
     if (!auth.valid) {
+      console.warn(`[XTREAM ${timeStr}] ❌ Auth failed for user "${username}": ${auth.error}`);
       return Response.json(
         { user_info: { auth: 0, status: "Disabled", message: auth.error } },
         { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" } }
@@ -404,10 +416,12 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     }
 
     const providerKey = auth.provider;
+    console.log(`[XTREAM ${timeStr}] 🔑 Auth OK: user "${username}" (Provider: ${providerKey})`);
     const xtreamData = await getOrLoadXtreamData(providerKey, getOrGeneratePlaylist, config);
 
     // Auth & General Server/User Info
     if (!action) {
+      console.log(`[XTREAM ${timeStr}] ℹ️ Server/User Info returned for user "${auth.username}" (Provider: ${providerKey})`);
       const nowSec = Math.floor(Date.now() / 1000);
       const host = url.hostname || "localhost";
       const protocol = url.protocol ? url.protocol.replace(":", "") : "http";
@@ -450,6 +464,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     // Action: get_live_categories
     if (action === "get_live_categories") {
       const categories = xtreamData?.categories || [];
+      console.log(`[XTREAM ${timeStr}] 📺 get_live_categories -> ${categories.length} categories`);
       return Response.json(categories, {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
@@ -466,6 +481,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
         streams = xtreamData?.streams || [];
       }
 
+      console.log(`[XTREAM ${timeStr}] 📺 get_live_streams (category: "${catId || "all"}") -> ${streams.length} streams`);
       return Response.json(streams, {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
@@ -475,6 +491,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     // Action: VOD Movie Categories
     if (action === "get_vod_categories") {
       const categories = await getVodCategories(config?.tmdbApiKey);
+      console.log(`[XTREAM ${timeStr}] 🎬 get_vod_categories -> ${categories.length} categories`);
       return Response.json(categories, {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
@@ -489,6 +506,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const page = parseInt(pageRaw || "1", 10) || 1;
       const search = extractSearchQuery(params);
       const streams = await getVodStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
+      console.log(`[XTREAM ${timeStr}] 🎬 get_vod_streams (category: "${catId || "all"}", page: ${page}, search: "${search || ""}") -> ${streams.length} movies`);
       return Response.json(streams, {
         status: 200,
         headers: {
@@ -507,6 +525,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
         return Response.json({}, { status: 200, headers: CORS_HEADERS });
       }
       const info = await getVodInfo(vodId, config?.tmdbApiKey);
+      console.log(`[XTREAM ${timeStr}] 🎬 get_vod_info (vodId: ${vodId}) -> "${info?.info?.name || "unknown"}"`);
       return Response.json(info, {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
@@ -516,6 +535,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     // Action: Series Categories
     if (action === "get_series_categories") {
       const categories = await getSeriesCategories(config?.tmdbApiKey);
+      console.log(`[XTREAM ${timeStr}] 🍿 get_series_categories -> ${categories.length} categories`);
       return Response.json(categories, {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
@@ -530,6 +550,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const page = parseInt(pageRaw || "1", 10) || 1;
       const search = extractSearchQuery(params);
       const series = await getSeriesStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
+      console.log(`[XTREAM ${timeStr}] 🍿 get_series (category: "${catId || "all"}", page: ${page}, search: "${search || ""}") -> ${series.length} series`);
       return Response.json(series, {
         status: 200,
         headers: {
@@ -565,6 +586,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
 
       if (isSeries) {
         const series = await getSeriesStreams(null, config?.tmdbApiKey, page, query, true);
+        console.log(`[XTREAM ${timeStr}] 🔎 ${action} [SERIES] (query: "${query}", page: ${page}) -> ${series.length} series`);
         return Response.json(series, {
           status: 200,
           headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8", "X-Page": String(page), "X-Per-Page": "20" },
@@ -573,6 +595,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
 
       // Default search: VOD (movies) only - strict separation between VOD and Series schemas
       const streams = await getVodStreams(null, config?.tmdbApiKey, page, query, true);
+      console.log(`[XTREAM ${timeStr}] 🔎 ${action} [VOD] (query: "${query}", page: ${page}) -> ${streams.length} movies`);
       return Response.json(streams, {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8", "X-Page": String(page), "X-Per-Page": "20" },
@@ -586,6 +609,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
         return Response.json({}, { status: 200, headers: CORS_HEADERS });
       }
       const info = await getSeriesInfo(seriesId, config?.tmdbApiKey);
+      console.log(`[XTREAM ${timeStr}] 🍿 get_series_info (seriesId: ${seriesId}) -> "${info?.info?.name || "unknown"}" (${info?.seasons?.length || 0} seasons)`);
       return Response.json(info, {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
@@ -601,6 +625,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     }
 
     // Fallback: Default status response
+    console.log(`[XTREAM ${timeStr}] ℹ️ Default status response returned for action: "${action || "none"}"`);
     return Response.json({ user_info: { auth: 1, status: "Active" } }, {
       status: 200,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
@@ -632,9 +657,11 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const targetUrl = xtreamData?.streamMap?.get(streamId);
 
       if (!targetUrl) {
+        console.warn(`[XTREAM ${timeStr}] ❌ Live Stream #${streamId} not found in provider "${providerKey}"`);
         return new Response("Stream not found or expired", { status: 404, headers: CORS_HEADERS });
       }
 
+      console.log(`[XTREAM ${timeStr}] ▶️ PLAY Live stream #${streamId} (${auth.username}) -> 302 Redirect to ${targetUrl}`);
       // HTTP 302 Redirect to upstream stream manifest / scraper
       return new Response(null, {
         status: 302,
@@ -667,6 +694,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
 
       // Build target video resolver URL
       const targetUrl = buildVodResolverUrl(streamId, config?.vodResolverUrl);
+      console.log(`[XTREAM ${timeStr}] ▶️ PLAY Movie #${streamId} (${auth.username}) -> 302 Redirect to ${targetUrl}`);
 
       return new Response(null, {
         status: 302,
@@ -707,6 +735,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
 
       // Build target series video resolver URL
       const targetUrl = buildSeriesResolverUrl(seriesId, sNum, epNum, config?.seriesResolverUrl);
+      console.log(`[XTREAM ${timeStr}] ▶️ PLAY Series episode #${episodeId} (Series: ${seriesId}, S${sNum}E${epNum}) (${auth.username}) -> 302 Redirect to ${targetUrl}`);
 
       return new Response(null, {
         status: 302,
@@ -722,9 +751,13 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
   if (pathname === "/get.php" || pathname.endsWith("/get.php")) {
     const username = url.searchParams.get("username") || url.searchParams.get("u");
     const password = url.searchParams.get("password") || url.searchParams.get("p");
+    const type = url.searchParams.get("type") || "m3u_plus";
+
+    console.log(`[XTREAM ${timeStr}] 📄 M3U Playlist download requested via /get.php (user: "${username}", type: "${type}", app: "${userAgent}")`);
 
     const auth = authenticateUser(username, password, config);
     if (!auth.valid) {
+      console.warn(`[XTREAM ${timeStr}] ❌ Unauthorized /get.php request for user "${username}"`);
       return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
     }
 

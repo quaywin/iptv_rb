@@ -70,6 +70,9 @@ const server = Bun.serve({
   port: config.port,
   async fetch(req) {
     const url = new URL(req.url);
+    const ua = req.headers.get("user-agent") || "none";
+    const timeStr = new Date().toISOString().substring(11, 19);
+    console.log(`[HTTP ${timeStr}] ${req.method} ${url.pathname}${url.search} | UA: ${ua}`);
 
     // 1. Handle Xtream Codes API and streams
     try {

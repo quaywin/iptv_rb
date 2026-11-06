@@ -43,6 +43,10 @@ function buildRuntimeConfig(env) {
 export async function onRequest(context) {
   const { request, env, waitUntil } = context;
   const url = new URL(request.url);
+  const ua = request.headers.get("user-agent") || "none";
+  const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "";
+  const timeStr = new Date().toISOString().substring(11, 19);
+  console.log(`[HTTP ${timeStr}] ${request.method} ${url.pathname}${url.search} | UA: "${ua}"${clientIp ? " | IP: " + clientIp : ""}`);
   const runtimeConfig = buildRuntimeConfig(env);
 
   // 1. Handle Xtream Codes API and streams
