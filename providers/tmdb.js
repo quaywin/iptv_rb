@@ -77,6 +77,9 @@ const VOD_CATEGORIES = [
   { category_id: "1006", category_name: "Phim Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "1000" } },
   { category_id: "1007", category_name: "Phim Hoạt Hình Chiếu Rạp", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
   { category_id: "1011", category_name: "Phim Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1012", category_name: "Phim Châu Á Nổi Bật", parent_id: 0, query: { with_original_language: "ko|zh|ja|th|vi", sort_by: "popularity.desc" } },
+  { category_id: "1013", category_name: "Phim Hàn Quốc (K-Movie)", parent_id: 0, query: { with_original_language: "ko", sort_by: "popularity.desc" } },
+  { category_id: "1014", category_name: "Phim Trung Quốc & HK", parent_id: 0, query: { with_original_language: "zh", sort_by: "popularity.desc" } },
 ];
 
 /**
@@ -162,6 +165,28 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
 
         const rawList = [
           ...revPages.flatMap(r => r?.results || []),
+          ...votePages.flatMap(r => r?.results || []),
+          ...popPages.flatMap(r => r?.results || []),
+        ];
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
+      } else if (["1012", "1013", "1014"].includes(String(categoryId))) {
+        // Multi-angle query for Asian hits:
+        // 1. Most acclaimed / voted of all time (Parasite, Spirited Away, Train to Busan, Oldboy...)
+        // 2. High popularity trending Asian movies (Exhuma, Godzilla Minus One...)
+        const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
+        const lang = catDef?.query?.with_original_language || "ko|zh|ja|th|vi";
+        const [votePages, popPages] = await Promise.all([
+          Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { with_original_language: lang, sort_by: "vote_count.desc", page: String(p) }, apiKey))),
+          Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { with_original_language: lang, sort_by: "popularity.desc", "vote_count.gte": "20", page: String(p) }, apiKey))),
+        ]);
+
+        const rawList = [
           ...votePages.flatMap(r => r?.results || []),
           ...popPages.flatMap(r => r?.results || []),
         ];
@@ -332,6 +357,9 @@ const SERIES_CATEGORIES = [
   { category_id: "1006", category_name: "Series Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "500" } },
   { category_id: "1007", category_name: "Series Anime / Hoạt Hình", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
   { category_id: "1011", category_name: "Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
+  { category_id: "1012", category_name: "Series Châu Á Nổi Bật", parent_id: 0, query: { with_original_language: "ko|zh|ja|th|vi", sort_by: "popularity.desc" } },
+  { category_id: "1013", category_name: "Series Hàn Quốc (K-Drama)", parent_id: 0, query: { with_original_language: "ko", sort_by: "popularity.desc" } },
+  { category_id: "1014", category_name: "Series Trung Quốc (C-Drama)", parent_id: 0, query: { with_original_language: "zh", sort_by: "popularity.desc" } },
 ];
 
 /**
