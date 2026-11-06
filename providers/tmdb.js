@@ -170,8 +170,11 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
     const baseNum = hasPageParam ? (page - 1) * 20 : 0;
     return results.map((m, idx) => {
       const year = m.release_date ? m.release_date.substring(0, 4) : "";
-      const primaryCatId = (m.genre_ids && m.genre_ids.length > 0)
-        ? String(m.genre_ids[0])
+      const genreId = (m.genre_ids && m.genre_ids.length > 0)
+        ? m.genre_ids[0]
+        : (m.genres && m.genres.length > 0 ? m.genres[0].id : null);
+      const primaryCatId = genreId !== null && genreId !== undefined
+        ? String(genreId)
         : (!isAllCategory(categoryId) ? String(categoryId) : "0");
       return {
         num: baseNum + idx + 1,
@@ -332,13 +335,18 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         }
       }
     } else {
-      // ALL category initial catalog: fetch newest releases + popular TV series (~380+ shows)
-      const [newestRes, popularRes] = await Promise.all([
+      // ALL category initial catalog: fetch newest releases + popular TV series + all-time acclaimed series (~450+ shows)
+      const [newestRes, popularRes, topVotedRes] = await Promise.all([
         Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))),
-        Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(p => fetchTmdb("/tv/popular", { page: String(p) }, apiKey))),
+        Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb("/tv/popular", { page: String(p) }, apiKey))),
+        Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { sort_by: "vote_count.desc", page: String(p) }, apiKey))),
       ]);
 
-      const rawList = [...newestRes.flatMap(r => r?.results || []), ...popularRes.flatMap(r => r?.results || [])];
+      const rawList = [
+        ...newestRes.flatMap(r => r?.results || []),
+        ...popularRes.flatMap(r => r?.results || []),
+        ...topVotedRes.flatMap(r => r?.results || []),
+      ];
       const seen = new Set();
       for (const item of rawList) {
         if (item?.id && !seen.has(item.id)) {
@@ -346,23 +354,44 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
           results.push(item);
         }
       }
+
+      // Ensure notable series like Poker Face (120998) are always included in the initial local database
+      if (!seen.has(120998)) {
+        try {
+          const pf = await fetchTmdb("/tv/120998", {}, apiKey);
+          if (pf?.id) {
+            seen.add(pf.id);
+            results.push(pf);
+          }
+        } catch (_) {}
+      }
+
       results.sort((a, b) => new Date(b.first_air_date || 0) - new Date(a.first_air_date || 0));
     }
 
     const baseNum = hasPageParam ? (page - 1) * 20 : 0;
     return results.map((s, idx) => {
       const year = s.first_air_date ? s.first_air_date.substring(0, 4) : "";
-      const primaryCatId = (s.genre_ids && s.genre_ids.length > 0)
-        ? String(s.genre_ids[0])
+      const genreId = (s.genre_ids && s.genre_ids.length > 0)
+        ? s.genre_ids[0]
+        : (s.genres && s.genres.length > 0 ? s.genres[0].id : null);
+      const primaryCatId = genreId !== null && genreId !== undefined
+        ? String(genreId)
         : (!isAllCategory(categoryId) ? String(categoryId) : "0");
       const airDateTs = s.first_air_date
         ? String(Math.floor(new Date(s.first_air_date).getTime() / 1000))
         : String(Math.floor(Date.now() / 1000));
+      const iconUrl = s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : "";
       return {
         num: baseNum + idx + 1,
         name: year ? `${s.name} (${year})` : s.name,
+        title: s.name,
+        year,
+        stream_type: "series",
+        stream_id: s.id, // Compatibility alias for players expecting stream_id
         series_id: s.id, // 32-bit tmdbId
-        cover: s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : "",
+        cover: iconUrl,
+        stream_icon: iconUrl,
         plot: s.overview || "",
         cast: "",
         director: "",
@@ -376,6 +405,7 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         youtube_trailer: "",
         episode_run_time: "45",
         category_id: primaryCatId,
+        category_ids: [primaryCatId],
       };
     });
   } catch (err) {

@@ -137,6 +137,30 @@ function getParam(params, key) {
 }
 
 /**
+ * Case-insensitive helper to extract search keyword from various parameter names used by different IPTV players
+ */
+function extractSearchQuery(params) {
+  return (
+    getParam(params, "search") ||
+    getParam(params, "query") ||
+    getParam(params, "q") ||
+    getParam(params, "keyword") ||
+    getParam(params, "search_term") ||
+    getParam(params, "term") ||
+    getParam(params, "text") ||
+    getParam(params, "s") ||
+    getParam(params, "filter") ||
+    getParam(params, "find") ||
+    getParam(params, "value") ||
+    getParam(params, "search_value") ||
+    getParam(params, "name") ||
+    getParam(params, "title") ||
+    getParam(params, "context") ||
+    ""
+  ).trim();
+}
+
+/**
  * Parse raw M3U text into structured Xtream categories and streams
  */
 function parseM3uToXtream(m3uContent) {
@@ -463,7 +487,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const pageRaw = getParam(params, "page");
       const hasPageParam = pageRaw !== null && pageRaw !== undefined && pageRaw !== "";
       const page = parseInt(pageRaw || "1", 10) || 1;
-      const search = getParam(params, "search") || getParam(params, "query") || getParam(params, "q") || getParam(params, "keyword") || getParam(params, "name") || getParam(params, "title") || getParam(params, "context") || "";
+      const search = extractSearchQuery(params);
       const streams = await getVodStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
       return Response.json(streams, {
         status: 200,
@@ -504,7 +528,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const pageRaw = getParam(params, "page");
       const hasPageParam = pageRaw !== null && pageRaw !== undefined && pageRaw !== "";
       const page = parseInt(pageRaw || "1", 10) || 1;
-      const search = getParam(params, "search") || getParam(params, "query") || getParam(params, "q") || getParam(params, "keyword") || getParam(params, "name") || getParam(params, "title") || getParam(params, "context") || "";
+      const search = extractSearchQuery(params);
       const series = await getSeriesStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
       return Response.json(series, {
         status: 200,
@@ -519,11 +543,27 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
 
     // Action: Search (search / search_vod / search_series)
     if (action === "search" || action === "search_vod" || action === "search_series") {
-      const type = (getParam(params, "type") || "").toLowerCase();
-      const query = getParam(params, "search") || getParam(params, "query") || getParam(params, "q") || getParam(params, "context") || getParam(params, "keyword") || "";
+      const type = (
+        getParam(params, "type") ||
+        getParam(params, "search_type") ||
+        getParam(params, "stream_type") ||
+        getParam(params, "media_type") ||
+        getParam(params, "content_type") ||
+        getParam(params, "section") ||
+        getParam(params, "mode") ||
+        getParam(params, "tab") ||
+        ""
+      ).toLowerCase();
+      const query = extractSearchQuery(params);
       const page = parseInt(getParam(params, "page") || "1", 10) || 1;
 
-      if (action === "search_series" || type === "series" || type === "tv") {
+      const isSeries =
+        action === "search_series" ||
+        type.includes("series") ||
+        type.includes("tv") ||
+        type.includes("show");
+
+      if (isSeries) {
         const series = await getSeriesStreams(null, config?.tmdbApiKey, page, query, true);
         return Response.json(series, {
           status: 200,
