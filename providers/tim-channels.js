@@ -16,7 +16,7 @@ function getChannelCountry(ch) {
   if (/Francais/i.test(name)) return { country: "France", flag: "🇫🇷", order: 3 };
   if (/Germany|Bundesliga|SPORTDIGITAL/i.test(name)) return { country: "Germany", flag: "🇩🇪", order: 4 };
   if (/Spain|LaLiga|Movistar|DAZN F1/i.test(name)) return { country: "Spain", flag: "🇪🇸", order: 5 };
-  if (/Italia|\bIT\b|Calcio|Sky Sport 24|Sky Sport Uno/i.test(name)) return { country: "Italy", flag: "🇮🇹", order: 6 };
+  if (/Italia|\bIT\b|Calcio|Sky Sport 24|Sky Sport Uno|\bSky Uno\b/i.test(name)) return { country: "Italy", flag: "🇮🇹", order: 6 };
   if (/Portugal|Sport TV\d/i.test(name)) return { country: "Portugal", flag: "🇵🇹", order: 7 };
   if (/PL\b|Polsat|Eleven Sports|CANAL\+ (?:Extra|Sport.*PL)/i.test(name)) return { country: "Poland", flag: "🇵🇱", order: 8 };
   if (/Fox Sports 50\d/i.test(name)) return { country: "Australia", flag: "🇦🇺", order: 9 };
@@ -96,9 +96,12 @@ async function generateTimChannelsPlaylist(customConfig = {}) {
   console.log("Starting TimChannels playlist generation...");
   const channels = await fetchTimChannelsList(cfg);
 
+  const epgUrl = cfg.timEpgUrl || cfg.epgUrl || "https://iptv-epg.org/files/epg-us.xml.gz,https://iptv-epg.org/files/epg-gb.xml.gz";
+  const epgHeader = epgUrl ? `url-tvg="${epgUrl}" x-tvg-url="${epgUrl}" ` : "";
+
   if (!channels.length) {
     console.log("No TimStreams channels found.");
-    return "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
+    return `#EXTM3U ${epgHeader}tvg-shift=0 m3uautoload=1\n\n`;
   }
 
   // Sắp xếp kênh theo Quốc gia ưu tiên -> Thể thao lên đầu -> Tên kênh A-Z
@@ -112,7 +115,7 @@ async function generateTimChannelsPlaylist(customConfig = {}) {
     return (a.name || "").localeCompare(b.name || "");
   });
 
-  let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
+  let m3uContent = `#EXTM3U ${epgHeader}tvg-shift=0 m3uautoload=1\n\n`;
   const separator = cfg.scrapeServiceUrl.includes("?") ? "&" : "?";
 
   for (const ch of channels) {

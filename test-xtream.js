@@ -514,7 +514,7 @@ https://stream.example.com/skypl/index.m3u8
   const epgTableJson = await epgTableRes.json();
   console.log("get_simple_data_table empty listings:", Array.isArray(epgTableJson.epg_listings) ? "PASSED" : "FAILED");
 
-  // 5l. /epg.xml placeholder test
+  // 5l. /epg.xml & /channel/epg XMLTV EPG test
   const epgXmlReq = new Request("http://localhost:3030/epg.xml");
   const epgXmlRes = await handleXtreamRequest({
     req: epgXmlReq,
@@ -522,8 +522,18 @@ https://stream.example.com/skypl/index.m3u8
     config,
     getOrGeneratePlaylist: dummyGetOrGenerate,
   });
-  const epgXmlText = await epgXmlRes.text();
-  console.log("/epg.xml XMLTV response:", epgXmlText.includes("<tv") ? "PASSED" : "FAILED");
+  const epgType = epgXmlRes.headers.get("content-type") || "";
+  const isEpgOk = (epgXmlRes.status === 200 || epgXmlRes.status === 302) && (epgType.includes("gzip") || epgType.includes("xml") || Boolean(epgXmlRes.headers.get("location")));
+  console.log("/epg.xml XMLTV response:", isEpgOk ? "PASSED" : "FAILED");
+
+  const channelEpgReq = new Request("http://localhost:3030/channel/epg?redirect=true");
+  const channelEpgRes = await handleXtreamRequest({
+    req: channelEpgReq,
+    url: new URL(channelEpgReq.url),
+    config,
+    getOrGeneratePlaylist: dummyGetOrGenerate,
+  });
+  console.log("/channel/epg 302 redirect:", channelEpgRes.status === 302 && channelEpgRes.headers.get("location").includes("epg-us") ? "PASSED" : "FAILED");
 
   console.log("\n🎉 ALL XTREAM CODES API & VOD/SERIES TESTS PASSED SUCCESSFULLY! 🎉\n");
 }

@@ -837,22 +837,65 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
     });
   }
 
-  // 6. Handle /xmltv.php, /epg.php, /epg.xml (XMLTV EPG placeholder)
+  // 6. Handle EPG endpoints (/xmltv.php, /epg.php, /epg.xml, /epg, /channel/epg, /channel.xml, etc.)
   if (
     pathname === "/xmltv.php" ||
     pathname.endsWith("/xmltv.php") ||
     pathname === "/epg.php" ||
     pathname.endsWith("/epg.php") ||
     pathname === "/epg.xml" ||
-    pathname.endsWith("/epg.xml")
+    pathname.endsWith("/epg.xml") ||
+    pathname === "/epg" ||
+    pathname === "/channel.xml" ||
+    pathname === "/channel/epg" ||
+    pathname === "/channel/epg.xml" ||
+    pathname === "/channel/epg.php"
   ) {
     console.log(`[XTREAM ${timeStr}] 📅 XMLTV EPG download requested via ${pathname} (App: "${userAgent}")`);
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="IPTV_RB"></tv>`;
-    return new Response(xml, {
-      status: 200,
+
+    const country = url.searchParams.get("country");
+    let targetEpgUrl = "";
+    if (country) {
+      targetEpgUrl = `https://iptv-epg.org/files/epg-${country.toLowerCase().trim()}.xml.gz`;
+    } else {
+      const epgSources = (config?.timEpgUrl || config?.epgUrl || "https://iptv-epg.org/files/epg-us.xml.gz").split(",");
+      targetEpgUrl = epgSources[0].trim();
+    }
+
+    if (url.searchParams.get("redirect") === "true") {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          ...CORS_HEADERS,
+          Location: targetEpgUrl,
+        },
+      });
+    }
+
+    try {
+      const upstreamRes = await fetch(targetEpgUrl, {
+        headers: { "User-Agent": config?.userAgent || "Mozilla/5.0" },
+      });
+      if (upstreamRes.ok) {
+        return new Response(upstreamRes.body, {
+          status: 200,
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type": upstreamRes.headers.get("content-type") || "application/gzip",
+            "Content-Disposition": `attachment; filename="${targetEpgUrl.split("/").pop() || "epg.xml.gz"}"`,
+            "Cache-Control": "public, max-age=3600",
+          },
+        });
+      }
+    } catch (e) {
+      console.warn(`Upstream EPG streaming failed, falling back to 302 redirect:`, e.message);
+    }
+
+    return new Response(null, {
+      status: 302,
       headers: {
         ...CORS_HEADERS,
-        "Content-Type": "application/xml; charset=utf-8",
+        Location: targetEpgUrl,
       },
     });
   }

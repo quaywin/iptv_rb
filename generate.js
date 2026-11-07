@@ -88,9 +88,12 @@ async function generateCombinedPlaylist(customConfig = {}) {
     .map(p => (p || "").replace(/^#EXTM3U[^\n]*\n+/i, "").trim())
     .filter(Boolean);
 
-  if (!parts.length) return "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
+  const epgUrl = customConfig.epgUrl || customConfig.timEpgUrl || "https://iptv-epg.org/files/epg-us.xml.gz,https://iptv-epg.org/files/epg-gb.xml.gz";
+  const epgHeader = epgUrl ? `url-tvg="${epgUrl}" x-tvg-url="${epgUrl}" ` : "";
 
-  return `#EXTM3U tvg-shift=0 m3uautoload=1\n\n${parts.join("\n\n")}\n`;
+  if (!parts.length) return `#EXTM3U ${epgHeader}tvg-shift=0 m3uautoload=1\n\n`;
+
+  return `#EXTM3U ${epgHeader}tvg-shift=0 m3uautoload=1\n\n${parts.join("\n\n")}\n`;
 }
 
 module.exports = {

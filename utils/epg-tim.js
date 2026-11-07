@@ -93,6 +93,10 @@ const TIM_EPG_MAP = {
   "tudn": "TUDN.us",
   "willow-cricket": "WillowCricket.us",
   "willow-cricket-2": "WillowCricketExtra.us",
+  "dirtvision-now-24-7": "DirtvisionNow.us",
+  "motogp-channel": "MotoGPChannel.us",
+  "racer-network": "RacerNetwork.us",
+  "ufc-fight-pass-24-7": "UFC24_7.us",
 
   // United Kingdom
   "bbc-one-london": "BBCOneLondon.uk",
@@ -155,6 +159,7 @@ const TIM_EPG_MAP = {
 
   // Italy
   "dazn-1-italia": "DAZN1.it",
+  "sky-uno": "SkyUno.it",
   "sky-sport-24": "SkySport24.it",
   "sky-sport-uno": "SkySportUno.it",
   "sky-sport-calcio-it": "SkySportCalcio.it",

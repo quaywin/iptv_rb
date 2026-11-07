@@ -121,9 +121,12 @@ async function generateSportsbitePlaylist(customConfig = {}) {
   console.log("Starting SportsBite /channel2 playlist generation...");
   const channels = await fetchSportsbiteChannels(cfg);
 
+  const epgUrl = cfg.channel2EpgUrl || cfg.epgUrl || "https://iptv-epg.org/files/epg-us.xml.gz,https://iptv-epg.org/files/epg-gb.xml.gz";
+  const epgHeader = epgUrl ? `url-tvg="${epgUrl}" x-tvg-url="${epgUrl}" ` : "";
+
   if (!channels.length) {
     console.log("No SportsBite channels found.");
-    return "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
+    return `#EXTM3U ${epgHeader}tvg-shift=0 m3uautoload=1\n\n`;
   }
 
   // Sắp xếp kênh theo Quốc gia -> Thể thao lên đầu -> Tên kênh A-Z
@@ -137,7 +140,7 @@ async function generateSportsbitePlaylist(customConfig = {}) {
     return (a.name || "").localeCompare(b.name || "");
   });
 
-  let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
+  let m3uContent = `#EXTM3U ${epgHeader}tvg-shift=0 m3uautoload=1\n\n`;
   const separator = cfg.scrapeServiceUrl.includes("?") ? "&" : "?";
 
   for (const ch of channels) {

@@ -11,6 +11,8 @@ function buildRuntimeConfig(env) {
     gkApiUrl: env.GK_API_URL,
     timApiUrl: env.TIM_API_URL,
     timChannelsUrl: env.TIM_CHANNELS_URL,
+    epgUrl: env.EPG_URL,
+    timEpgUrl: env.TIM_EPG_URL || env.EPG_URL,
     sportsbiteChannelsUrl: env.SPORTSBITE_CHANNELS_URL,
     pitApiUrl: env.PIT_API_URL,
     cineApiUrl: env.CINE_API_URL,

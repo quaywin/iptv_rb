@@ -114,11 +114,16 @@ Add the playlist URL to your favorite IPTV player (TiviMate, VLC, OTT Navigator)
   https://iptv-140.pages.dev/tim
   ```
 
-- **TimStreams 24/7 Channels** (219 Channels, Sports, Entertainment, Movies, News):
+- **TimStreams 24/7 Channels** (220 Channels, Sports, Entertainment, Movies, News with Full EPG):
   ```text
   https://iptv-140.pages.dev/channel
   ```
-  *(or `/channels`)*
+  *(or `/channels`, `/channel.m3u`)*
+  - **EPG Integration**: Tự động tích hợp trong header `#EXTM3U` qua thẻ `url-tvg` và `x-tvg-url` (100% kênh có `tvg-id` chuẩn XMLTV).
+  - **EPG Endpoints**:
+    - Mặc định: `https://iptv-140.pages.dev/channel/epg` (hoặc `/epg`, `/epg.xml`, `/channel.xml`)
+    - Theo quốc gia: `https://iptv-140.pages.dev/epg?country=uk` (`us`, `it`, `pl`, `es`, `fr`, `de`, `pt`, `au`, `nz`, `in`, `ca`)
+    - Chuyển hướng trực tiếp: `https://iptv-140.pages.dev/channel/epg?redirect=true`
 
 - **SportsBite 24/7 Channels** (830+ Channels, 47 Countries, Sports, Movies, News):
   ```text

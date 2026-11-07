@@ -13,6 +13,8 @@ const config = {
   timApiUrl: env.TIM_API_URL || "https://corsproxy.io/?url=https%3A%2F%2Ftim-streams.com%2Fapi%2Flive-upcoming",
   timChannelsUrl: env.TIM_CHANNELS_URL || "https://corsproxy.io/?url=https%3A%2F%2Ftim-streams.com%2Fapi%2Fchannels",
   timWatchBaseUrl: env.TIM_WATCH_BASE_URL || "https://corsproxy.io/?url=https%3A%2F%2Ftim-streams.com%2Fapi%2Fwatch",
+  epgUrl: env.EPG_URL || "https://iptv-epg.org/files/epg-us.xml.gz,https://iptv-epg.org/files/epg-gb.xml.gz",
+  timEpgUrl: env.TIM_EPG_URL || env.EPG_URL || "https://iptv-epg.org/files/epg-us.xml.gz,https://iptv-epg.org/files/epg-gb.xml.gz",
   gkApiUrl: env.GK_API_URL || "https://api.reedstreams.link/api/matches/all",
   sportsbiteChannelsUrl: env.SPORTSBITE_CHANNELS_URL || "https://sportsbite.org/api/forestgump/channels",
   pitApiUrl: env.PIT_API_URL || "https://pitsport.st/api/v1/home",

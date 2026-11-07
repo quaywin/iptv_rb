@@ -535,6 +535,8 @@ function mergeConfig(customConfig = {}) {
       if (k === "XTREAM_USERS") cleanCustom.xtreamUsers = v;
       if (k === "TIMEZONE") cleanCustom.timezone = v;
       if (k === "EMBED_BASE_URL") cleanCustom.embedBaseUrl = v;
+      if (k === "EPG_URL") cleanCustom.epgUrl = v;
+      if (k === "TIM_EPG_URL") cleanCustom.timEpgUrl = v;
     }
   }
   return { ...config, ...cleanCustom };
