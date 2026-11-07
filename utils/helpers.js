@@ -316,7 +316,7 @@ const PROVIDER_MIRRORS = {
   strm: ["https://strmfree.st", "https://strmfree.to", "https://strmfree.is", "https://strmfree.ws", "https://streamfree.to"],
   cine: ["https://cinevid.st", "https://cinevid.to", "https://cinevid.is", "https://cinevid.ws"],
   dam: ["https://ondemand.st", "https://ondemand.to", "https://ondemand.is", "https://damitv.st", "https://damitv.to"],
-  tim: ["https://tim-streams.com", "https://tim-streams.to", "https://tim-streams.net", "https://tim-streams.is"],
+  tim: ["https://tim-streams.com"],
   gk: ["https://api.reedstreams.link", "https://reedstreams.link", "https://api.reedstreams.to", "https://api.reedstreams.is"],
   pit: ["https://pitsport.st", "https://pitsport.to", "https://pitsport.is", "https://pitsport.ws"],
   sportsbite: ["https://sportsbite.org", "https://sportsbite.to", "https://sportsbite.st", "https://sportsbite.net"],
@@ -433,8 +433,9 @@ function rankCandidateUrls(urls) {
 
 /**
  * Generate candidate URLs by replacing the host of primaryUrl with fallback hosts
+ * and optionally appending a proxy candidate (e.g., via proxy-chunk service).
  */
-function buildCandidateUrls(primaryUrl, alternateHosts = []) {
+function buildCandidateUrls(primaryUrl, alternateHosts = [], proxyBaseUrl = null) {
   if (!primaryUrl) return [];
   const candidates = [primaryUrl];
   try {
@@ -449,6 +450,19 @@ function buildCandidateUrls(primaryUrl, alternateHosts = []) {
       } catch (e) {}
     }
   } catch (e) {}
+
+  // If proxyBaseUrl is provided (or defaults to proxy.quaywin.com), add /proxy-chunk candidate
+  const effectiveProxy = proxyBaseUrl || config.scrapeServiceUrl || "https://proxy.quaywin.com";
+  if (effectiveProxy) {
+    try {
+      const proxyOrigin = new URL(effectiveProxy).origin;
+      const proxiedUrl = `${proxyOrigin}/proxy-chunk?url=${encodeURIComponent(primaryUrl)}`;
+      if (!candidates.includes(proxiedUrl)) {
+        candidates.push(proxiedUrl);
+      }
+    } catch (e) {}
+  }
+
   return candidates;
 }
 

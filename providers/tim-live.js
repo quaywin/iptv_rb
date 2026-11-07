@@ -9,18 +9,47 @@ const {
   PROVIDER_MIRRORS,
 } = require("../utils/helpers");
 
+const TIM_BROWSER_HEADERS = {
+  "Origin": "https://iptv-140.pages.dev",
+  "Referer": "https://iptv-140.pages.dev/",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Site": "cross-site",
+};
+
+function buildTimWatchUrl(baseWatchUrl, eventSlug) {
+  if (!baseWatchUrl || !eventSlug) return "";
+  if (baseWatchUrl.includes("url=")) {
+    const parts = baseWatchUrl.split("url=");
+    const target = decodeURIComponent(parts[1]).replace(/\/+$/, "");
+    return `${parts[0]}url=${encodeURIComponent(`${target}/${eventSlug}`)}`;
+  }
+  return `${baseWatchUrl.replace(/\/+$/, "")}/${eventSlug}`;
+}
+
 /**
  * Fetch live and upcoming events from tim-streams API with multi-mirror fallback
  */
 async function fetchTimStreamList(cfg) {
   try {
-    const urls = buildCandidateUrls(cfg.timApiUrl, PROVIDER_MIRRORS.tim);
+    const directUrl = "https://tim-streams.com/api/live-upcoming";
+    const candidates = [
+      cfg.timApiUrl,
+      directUrl,
+    ];
+    if (cfg.scrapeServiceUrl) {
+      try {
+        const proxyOrigin = new URL(cfg.scrapeServiceUrl).origin;
+        candidates.push(`${proxyOrigin}/proxy-chunk?url=${encodeURIComponent(directUrl)}`);
+      } catch (e) {}
+    }
+    const urls = Array.from(new Set(candidates.filter(Boolean)));
     console.log(`Fetching Tim Live events (primary: ${cfg.timApiUrl}, candidates: ${urls.length})`);
 
     const data = await fetchWithFallback(urls, {
       timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
+        ...TIM_BROWSER_HEADERS,
       },
     });
 
@@ -48,10 +77,23 @@ async function resolveTimEventStream(event, cfg) {
   if (!event.url) return null;
 
   try {
-    const watchUrls = buildCandidateUrls(`${cfg.timWatchBaseUrl}/${event.url}`, PROVIDER_MIRRORS.tim);
+    const primaryWatch = buildTimWatchUrl(cfg.timWatchBaseUrl, event.url);
+    const directWatch = `https://tim-streams.com/api/watch/${event.url}`;
+    const candidates = [primaryWatch, directWatch];
+    if (cfg.scrapeServiceUrl) {
+      try {
+        const proxyOrigin = new URL(cfg.scrapeServiceUrl).origin;
+        candidates.push(`${proxyOrigin}/proxy-chunk?url=${encodeURIComponent(directWatch)}`);
+      } catch (e) {}
+    }
+    const watchUrls = Array.from(new Set(candidates.filter(Boolean)));
+
     const json = await fetchWithFallback(watchUrls, {
       timeoutMs: 4000,
-      headers: { "User-Agent": cfg.userAgent },
+      headers: {
+        "User-Agent": cfg.userAgent,
+        ...TIM_BROWSER_HEADERS,
+      },
     });
     return json.item?.streams?.[0]?.url || null;
   } catch (e) {

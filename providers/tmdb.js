@@ -170,17 +170,76 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
     } else if (hasPageParam) {
       if (!isAllCategory(categoryId)) {
         const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
-        if (catDef) {
-          if (catDef.query?.endpoint) {
-            endpoint = catDef.query.endpoint;
+        if (catDef?.query?.special === "harry_potter") {
+          const [hpCol, fbCol, hpSearch] = await Promise.all([
+            fetchTmdb("/collection/1241", {}, apiKey),
+            fetchTmdb("/collection/435259", {}, apiKey),
+            fetchTmdb("/search/movie", { query: "Harry Potter" }, apiKey),
+          ]);
+          const raw = [...(hpCol?.parts || []), ...(fbCol?.parts || []), ...(hpSearch?.results || [])];
+          const seen = new Set();
+          const unique = [];
+          for (const item of raw) {
+            if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
           }
-          Object.assign(baseParams, catDef.query);
+          results = unique.slice((page - 1) * 20, page * 20);
+        } else if (catDef?.query?.special === "lotr") {
+          const [lotrCol, hobCol, lotrSearch] = await Promise.all([
+            fetchTmdb("/collection/119", {}, apiKey),
+            fetchTmdb("/collection/121938", {}, apiKey),
+            fetchTmdb("/search/movie", { query: "Lord of the Rings" }, apiKey),
+          ]);
+          const raw = [...(lotrCol?.parts || []), ...(hobCol?.parts || []), ...(lotrSearch?.results || [])];
+          const seen = new Set();
+          const unique = [];
+          for (const item of raw) {
+            if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
+          }
+          results = unique.slice((page - 1) * 20, page * 20);
+        } else if (catDef?.query?.special === "fast_and_furious") {
+          const [ffCol, ffSearch] = await Promise.all([
+            fetchTmdb("/collection/9485", {}, apiKey),
+            fetchTmdb("/search/movie", { query: "Fast & Furious" }, apiKey),
+          ]);
+          const raw = [...(ffCol?.parts || []), ...(ffSearch?.results || [])];
+          const seen = new Set();
+          const unique = [];
+          for (const item of raw) {
+            if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
+          }
+          results = unique.slice((page - 1) * 20, page * 20);
+        } else if (catDef?.query?.special === "monsterverse") {
+          const [gz, kong] = await Promise.all([
+            fetchTmdb("/search/movie", { query: "Godzilla" }, apiKey),
+            fetchTmdb("/search/movie", { query: "Kong" }, apiKey),
+          ]);
+          const raw = [...(gz?.results || []), ...(kong?.results || [])];
+          const seen = new Set();
+          const unique = [];
+          for (const item of raw) {
+            if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
+          }
+          results = unique.slice((page - 1) * 20, page * 20);
+        } else if (catDef?.query?.special === "james_bond") {
+          const bondCol = await fetchTmdb("/collection/645", {}, apiKey);
+          const raw = bondCol?.parts || [];
+          results = raw.slice((page - 1) * 20, page * 20);
         } else {
-          baseParams.with_genres = String(categoryId);
+          if (catDef) {
+            if (catDef.query?.endpoint) {
+              endpoint = catDef.query.endpoint;
+            }
+            Object.assign(baseParams, catDef.query);
+          } else {
+            baseParams.with_genres = String(categoryId);
+          }
+          const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
+          results = json?.results || [];
         }
+      } else {
+        const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
+        results = json?.results || [];
       }
-      const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
-      results = json?.results || [];
     } else if (!isAllCategory(categoryId)) {
       const yearStr = String(categoryId);
       if (["2026", "2025", "2024", "2023"].includes(yearStr)) {
@@ -321,63 +380,119 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         }
       }
     } else {
-      // ALL category initial catalog: fetch from each curated category so the app's local SQLite DB has items for ALL categories
+      // ALL category initial catalog: fetch from each curated category with multi-page depth
+      // so EVERY category has at least 25 dedicated movies without getting starved by earlier categories.
+      const TARGET_PER_CAT = 25;
       const categoryFetches = VOD_CATEGORIES.map(async (cat) => {
         let catEndpoint = "/discover/movie";
-        let params = { sort_by: "popularity.desc", page: "1" };
+        let params = { sort_by: "popularity.desc" };
         if (cat.query?.endpoint) {
           catEndpoint = cat.query.endpoint;
-          params = { page: "1" };
+          params = {};
         } else if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
           params.primary_release_year = cat.category_id;
         } else if (cat.query?.special === "harry_potter") {
-          const hpCol = await fetchTmdb("/collection/1241", {}, apiKey);
-          return (hpCol?.parts || []).map(item => ({ ...item, _assignedCatId: cat.category_id }));
+          const [hpCol, fbCol, hpSearch] = await Promise.all([
+            fetchTmdb("/collection/1241", {}, apiKey),
+            fetchTmdb("/collection/435259", {}, apiKey),
+            fetchTmdb("/search/movie", { query: "Harry Potter" }, apiKey),
+          ]);
+          return {
+            catId: cat.category_id,
+            items: [...(hpCol?.parts || []), ...(fbCol?.parts || []), ...(hpSearch?.results || [])],
+          };
         } else if (cat.query?.special === "lotr") {
-          const lotrCol = await fetchTmdb("/collection/119", {}, apiKey);
-          return (lotrCol?.parts || []).map(item => ({ ...item, _assignedCatId: cat.category_id }));
+          const [lotrCol, hobCol, lotrSearch] = await Promise.all([
+            fetchTmdb("/collection/119", {}, apiKey),
+            fetchTmdb("/collection/121938", {}, apiKey),
+            fetchTmdb("/search/movie", { query: "Lord of the Rings" }, apiKey),
+          ]);
+          return {
+            catId: cat.category_id,
+            items: [...(lotrCol?.parts || []), ...(hobCol?.parts || []), ...(lotrSearch?.results || [])],
+          };
         } else if (cat.query?.special === "fast_and_furious") {
-          const ffCol = await fetchTmdb("/collection/9485", {}, apiKey);
-          return (ffCol?.parts || []).map(item => ({ ...item, _assignedCatId: cat.category_id }));
+          const [ffCol, ffSearch] = await Promise.all([
+            fetchTmdb("/collection/9485", {}, apiKey),
+            fetchTmdb("/search/movie", { query: "Fast & Furious" }, apiKey),
+          ]);
+          return {
+            catId: cat.category_id,
+            items: [...(ffCol?.parts || []), ...(ffSearch?.results || [])],
+          };
         } else if (cat.query?.special === "monsterverse") {
-          const gz = await fetchTmdb("/search/movie", { query: "Godzilla" }, apiKey);
-          return (gz?.results || []).slice(0, 15).map(item => ({ ...item, _assignedCatId: cat.category_id }));
+          const [gz, kong] = await Promise.all([
+            fetchTmdb("/search/movie", { query: "Godzilla" }, apiKey),
+            fetchTmdb("/search/movie", { query: "Kong" }, apiKey),
+          ]);
+          return {
+            catId: cat.category_id,
+            items: [...(gz?.results || []), ...(kong?.results || [])],
+          };
         } else if (cat.query?.special === "james_bond") {
           const bondCol = await fetchTmdb("/collection/645", {}, apiKey);
-          return (bondCol?.parts || []).slice(0, 15).map(item => ({ ...item, _assignedCatId: cat.category_id }));
+          return {
+            catId: cat.category_id,
+            items: bondCol?.parts || [],
+          };
         } else if (cat.query) {
           Object.assign(params, cat.query);
         }
-        const json = await fetchTmdb(catEndpoint, params, apiKey);
-        const list = json?.results || [];
-        return list.map(item => ({ ...item, _assignedCatId: cat.category_id }));
+
+        // Platforms & kids have high overlap with Trending & Year categories, fetch up to 8 pages; others 4 pages
+        const pageCount = ["1004", "1003", "1001", "1031", "1032"].includes(cat.category_id) ? 8 : 4;
+        const pages = Array.from({ length: pageCount }, (_, i) => i + 1);
+        const responses = await Promise.all(
+          pages.map(p => fetchTmdb(catEndpoint, { ...params, page: String(p) }, apiKey))
+        );
+        return {
+          catId: cat.category_id,
+          items: responses.flatMap(r => r?.results || []),
+        };
       });
 
       const batches = await Promise.all(categoryFetches);
-      const seen = new Set();
+      const movieMap = new Map();
+
+      // Allocate primary category to ensure every category has dedicated items, and multi-tag overlap
       for (const batch of batches) {
-        for (const item of batch) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
+        let allocatedPrimary = 0;
+        for (const item of batch.items) {
+          if (!item?.id) continue;
+          const existing = movieMap.get(item.id);
+          if (existing) {
+            existing._categoryIdsSet.add(batch.catId);
+          } else {
+            if (allocatedPrimary < TARGET_PER_CAT) {
+              item._assignedCatId = batch.catId;
+              item._categoryIdsSet = new Set([batch.catId]);
+              if (item.release_date) {
+                const y = item.release_date.substring(0, 4);
+                if (y) item._categoryIdsSet.add(y);
+              }
+              movieMap.set(item.id, item);
+              allocatedPrimary++;
+            }
           }
         }
       }
 
-      // Also include extra 2026 releases & popular hits for richness
+      // Also ensure extra 2026 releases & popular hits are present
       const [res2026, resPop] = await Promise.all([
         Promise.all([1, 2].map(p => fetchTmdb("/discover/movie", { primary_release_year: "2026", sort_by: "popularity.desc", page: String(p) }, apiKey))),
         Promise.all([1, 2].map(p => fetchTmdb("/movie/popular", { page: String(p) }, apiKey))),
       ]);
       for (const p of [...res2026, ...resPop]) {
         for (const item of (p?.results || [])) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
+          if (item?.id && !movieMap.has(item.id)) {
+            item._assignedCatId = "2026";
+            item._categoryIdsSet = new Set(["2026"]);
+            movieMap.set(item.id, item);
           }
         }
       }
-      // Sort so newest releases stay on top
+
+      results = Array.from(movieMap.values());
       results.sort((a, b) => new Date(b.release_date || 0) - new Date(a.release_date || 0));
     }
 
@@ -405,7 +520,7 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         rating_5based: ((m.vote_average || 0) / 2).toFixed(1),
         added: m.release_date ? String(Math.floor(new Date(m.release_date).getTime() / 1000)) : "0",
         category_id: primaryCatId,
-        category_ids: [primaryCatId, year].filter(Boolean),
+        category_ids: m._categoryIdsSet ? Array.from(m._categoryIdsSet) : [primaryCatId, year].filter(Boolean),
         container_extension: "mp4",
         custom_sid: "",
         direct_source: "",
@@ -569,17 +684,36 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
     } else if (hasPageParam) {
       if (!isAllCategory(categoryId)) {
         const catDef = SERIES_CATEGORIES.find(c => c.category_id === String(categoryId));
-        if (catDef) {
-          if (catDef.query?.endpoint) {
-            endpoint = catDef.query.endpoint;
+        if (catDef?.query?.special === "got_lotr") {
+          const [got, hotd, lotr, witcher] = await Promise.all([
+            fetchTmdb("/search/tv", { query: "Game of Thrones" }, apiKey),
+            fetchTmdb("/search/tv", { query: "House of the Dragon" }, apiKey),
+            fetchTmdb("/search/tv", { query: "The Rings of Power" }, apiKey),
+            fetchTmdb("/search/tv", { query: "The Witcher" }, apiKey),
+          ]);
+          const raw = [...(got?.results || []), ...(hotd?.results || []), ...(lotr?.results || []), ...(witcher?.results || [])];
+          const seen = new Set();
+          const unique = [];
+          for (const item of raw) {
+            if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
           }
-          Object.assign(baseParams, catDef.query);
+          results = unique.slice((page - 1) * 20, page * 20);
         } else {
-          baseParams.with_genres = String(categoryId);
+          if (catDef) {
+            if (catDef.query?.endpoint) {
+              endpoint = catDef.query.endpoint;
+            }
+            Object.assign(baseParams, catDef.query);
+          } else {
+            baseParams.with_genres = String(categoryId);
+          }
+          const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
+          results = json?.results || [];
         }
+      } else {
+        const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
+        results = json?.results || [];
       }
-      const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
-      results = json?.results || [];
     } else if (!isAllCategory(categoryId)) {
       const yearStr = String(categoryId);
       if (["2026", "2025", "2024", "2023"].includes(yearStr)) {
@@ -650,52 +784,80 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         }
       }
     } else {
-      // ALL category initial catalog: fetch from each curated category so the app's local SQLite DB has items for ALL categories
+      // ALL category initial catalog: fetch from each curated category with multi-page depth
+      // so EVERY series category has at least 25 dedicated series without getting starved by earlier categories.
+      const TARGET_PER_CAT = 25;
       const categoryFetches = SERIES_CATEGORIES.map(async (cat) => {
         let catEndpoint = "/discover/tv";
-        let params = { sort_by: "popularity.desc", page: "1" };
+        let params = { sort_by: "popularity.desc" };
         if (cat.query?.endpoint) {
           catEndpoint = cat.query.endpoint;
-          params = { page: "1" };
+          params = {};
         } else if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
           params.first_air_date_year = cat.category_id;
         } else if (cat.query?.special === "got_lotr") {
-          const [got, hotd, lotr] = await Promise.all([
+          const [got, hotd, lotr, witcher] = await Promise.all([
             fetchTmdb("/search/tv", { query: "Game of Thrones" }, apiKey),
             fetchTmdb("/search/tv", { query: "House of the Dragon" }, apiKey),
             fetchTmdb("/search/tv", { query: "The Rings of Power" }, apiKey),
+            fetchTmdb("/search/tv", { query: "The Witcher" }, apiKey),
           ]);
-          const list = [...(got?.results || []), ...(hotd?.results || []), ...(lotr?.results || [])];
-          return list.map(item => ({ ...item, _assignedCatId: cat.category_id }));
+          return {
+            catId: cat.category_id,
+            items: [...(got?.results || []), ...(hotd?.results || []), ...(lotr?.results || []), ...(witcher?.results || [])],
+          };
         } else if (cat.query) {
           Object.assign(params, cat.query);
         }
-        const json = await fetchTmdb(catEndpoint, params, apiKey);
-        const list = json?.results || [];
-        return list.map(item => ({ ...item, _assignedCatId: cat.category_id }));
+
+        const pageCount = ["1004", "1003", "1001", "1031", "1032"].includes(cat.category_id) ? 6 : 4;
+        const pages = Array.from({ length: pageCount }, (_, i) => i + 1);
+        const responses = await Promise.all(
+          pages.map(p => fetchTmdb(catEndpoint, { ...params, page: String(p) }, apiKey))
+        );
+        return {
+          catId: cat.category_id,
+          items: responses.flatMap(r => r?.results || []),
+        };
       });
 
       const batches = await Promise.all(categoryFetches);
-      const seen = new Set();
+      const seriesMap = new Map();
+
       for (const batch of batches) {
-        for (const item of batch) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
+        let allocatedPrimary = 0;
+        for (const item of batch.items) {
+          if (!item?.id) continue;
+          const existing = seriesMap.get(item.id);
+          if (existing) {
+            existing._categoryIdsSet.add(batch.catId);
+          } else {
+            if (allocatedPrimary < TARGET_PER_CAT) {
+              item._assignedCatId = batch.catId;
+              item._categoryIdsSet = new Set([batch.catId]);
+              if (item.first_air_date) {
+                const y = item.first_air_date.substring(0, 4);
+                if (y) item._categoryIdsSet.add(y);
+              }
+              seriesMap.set(item.id, item);
+              allocatedPrimary++;
+            }
           }
         }
       }
 
       // Ensure notable series like Poker Face (120998) are always included and tagged with Peacock (1001)
-      if (!seen.has(120998)) {
+      if (!seriesMap.has(120998)) {
         try {
           const pf = await fetchTmdb("/tv/120998", {}, apiKey);
           if (pf?.id) {
             pf._assignedCatId = "1001";
-            seen.add(pf.id);
-            results.push(pf);
+            pf._categoryIdsSet = new Set(["1001"]);
+            seriesMap.set(pf.id, pf);
           }
         } catch (_) {}
+      } else {
+        seriesMap.get(120998)._categoryIdsSet.add("1001");
       }
 
       // Also include extra 2026 releases & popular series for richness
@@ -705,13 +867,15 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
       ]);
       for (const p of [...res2026, ...resPop]) {
         for (const item of (p?.results || [])) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
+          if (item?.id && !seriesMap.has(item.id)) {
+            item._assignedCatId = "2026";
+            item._categoryIdsSet = new Set(["2026"]);
+            seriesMap.set(item.id, item);
           }
         }
       }
 
+      results = Array.from(seriesMap.values());
       results.sort((a, b) => new Date(b.first_air_date || 0) - new Date(a.first_air_date || 0));
     }
 
@@ -742,7 +906,7 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         cover: iconUrl,
         stream_icon: iconUrl,
         category_id: primaryCatId,
-        category_ids: [primaryCatId, year].filter(Boolean),
+        category_ids: s._categoryIdsSet ? Array.from(s._categoryIdsSet) : [primaryCatId, year].filter(Boolean),
         plot: s.overview || "",
         cast: "",
         director: "",

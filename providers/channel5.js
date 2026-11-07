@@ -109,8 +109,9 @@ async function fetchCdnChannelsList(cfg) {
 
     for (const ch of channels) {
       if (!ch || !ch.name) continue;
-      // Filter offline channels unless explicitly configured
-      if (!cfg.cdnIncludeOffline && ch.status && ch.status.toLowerCase() === "offline") {
+      // Default to true (include all channels) to ensure stable playlist count and prevent channels flapping
+      const includeOffline = cfg.cdnIncludeOffline !== undefined ? cfg.cdnIncludeOffline : true;
+      if (!includeOffline && ch.status && ch.status.toLowerCase() === "offline") {
         continue;
       }
       validChannels.push(ch);
@@ -161,7 +162,9 @@ async function generateCdnPlaylist(customConfig = {}) {
 
   for (const ch of channels) {
     const embedUrl = ch.url || `https://cdnlivetv.tv/api/v1/channels/player/?name=${encodeURIComponent(ch.name)}&code=${encodeURIComponent(ch.code || "")}&user=cdnlivetv&plan=free`;
-    const displayName = `${ch.name} 📺`;
+    const isOffline = ch.status && ch.status.toLowerCase() === "offline";
+    const statusSuffix = isOffline ? " ⚪" : "";
+    const displayName = `${ch.name} 📺${statusSuffix}`;
     const tvgName = (ch.name || "").trim();
     const slug = ch.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     const tvgId = `cdn-${slug}`;

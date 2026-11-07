@@ -37,18 +37,37 @@ function getChannelCountry(ch) {
   return { country: "United States", flag: "🇺🇸", order: 1 };
 }
 
+const TIM_BROWSER_HEADERS = {
+  "Origin": "https://iptv-140.pages.dev",
+  "Referer": "https://iptv-140.pages.dev/",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Site": "cross-site",
+};
+
 /**
  * Fetch 24/7 channels from tim-streams API with multi-mirror fallback
  */
 async function fetchTimChannelsList(cfg) {
   try {
-    const urls = buildCandidateUrls(cfg.timChannelsUrl, PROVIDER_MIRRORS.tim);
+    const directUrl = "https://tim-streams.com/api/channels";
+    const candidates = [
+      cfg.timChannelsUrl,
+      directUrl,
+    ];
+    if (cfg.scrapeServiceUrl) {
+      try {
+        const proxyOrigin = new URL(cfg.scrapeServiceUrl).origin;
+        candidates.push(`${proxyOrigin}/proxy-chunk?url=${encodeURIComponent(directUrl)}`);
+      } catch (e) {}
+    }
+    const urls = Array.from(new Set(candidates.filter(Boolean)));
     console.log(`Fetching TimChannels (primary: ${cfg.timChannelsUrl}, candidates: ${urls.length})`);
 
     const data = await fetchWithFallback(urls, {
       timeoutMs: cfg.timeout || 6000,
       headers: {
         "User-Agent": cfg.userAgent,
+        ...TIM_BROWSER_HEADERS,
       },
     });
 
