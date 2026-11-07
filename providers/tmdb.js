@@ -63,10 +63,22 @@ async function fetchTmdb(endpoint, params = {}, apiKey = DEFAULT_TMDB_API_KEY, t
  */
 const VOD_CATEGORIES = [
   { category_id: "2026", category_name: "Phim Chiếu Rạp 2026", parent_id: 0, query: { primary_release_year: "2026", sort_by: "popularity.desc" } },
-  { category_id: "1001", category_name: "Phim Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "2025", category_name: "Phim 2025 (Nổi Bật)", parent_id: 0, query: { primary_release_year: "2025", sort_by: "popularity.desc" } },
   { category_id: "2024", category_name: "Phim 2024 (Nổi Bật)", parent_id: 0, query: { primary_release_year: "2024", sort_by: "popularity.desc" } },
   { category_id: "2023", category_name: "Phim 2023 (Nổi Bật)", parent_id: 0, query: { primary_release_year: "2023", sort_by: "popularity.desc" } },
+
+  // Vũ trụ điện ảnh & Thương hiệu đình đám (Franchises & Cinematic Universes)
+  { category_id: "1015", category_name: "Vũ Trụ Marvel (MCU)", parent_id: 0, query: { with_companies: "420|7505", sort_by: "popularity.desc" } },
+  { category_id: "1016", category_name: "Vũ Trụ Star Wars", parent_id: 0, query: { with_companies: "1", sort_by: "popularity.desc" } },
+  { category_id: "1017", category_name: "Vũ Trụ DC (Batman & Superman)", parent_id: 0, query: { with_companies: "9993|429|128064", sort_by: "popularity.desc" } },
+  { category_id: "1018", category_name: "Thế Giới Phù Thủy Harry Potter", parent_id: 0, query: { special: "harry_potter", sort_by: "popularity.desc" } },
+  { category_id: "1019", category_name: "Chúa Tể Những Chiếc Nhẫn (LOTR)", parent_id: 0, query: { special: "lotr", sort_by: "popularity.desc" } },
+  { category_id: "1020", category_name: "Fast & Furious (Quá Nhanh)", parent_id: 0, query: { special: "fast_and_furious", sort_by: "popularity.desc" } },
+  { category_id: "1021", category_name: "Vũ Trụ MonsterVerse (Godzilla & Kong)", parent_id: 0, query: { special: "monsterverse", sort_by: "popularity.desc" } },
+  { category_id: "1022", category_name: "Điệp Viên 007 (James Bond)", parent_id: 0, query: { special: "james_bond", sort_by: "popularity.desc" } },
+
+  // Nền tảng phát hành toàn cầu
+  { category_id: "1001", category_name: "Phim Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1002", category_name: "Phim Netflix", parent_id: 0, query: { with_watch_providers: "8", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1003", category_name: "Phim HBO Max", parent_id: 0, query: { with_watch_providers: "1899|384", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1008", category_name: "Phim Amazon Prime", parent_id: 0, query: { with_watch_providers: "9|119", watch_region: "US", sort_by: "popularity.desc" } },
@@ -74,6 +86,8 @@ const VOD_CATEGORIES = [
   { category_id: "1010", category_name: "Phim Hulu", parent_id: 0, query: { with_watch_providers: "15", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1004", category_name: "Phim Disney+", parent_id: 0, query: { with_watch_providers: "337", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1005", category_name: "Phim Apple TV+", parent_id: 0, query: { with_watch_providers: "350", watch_region: "US", sort_by: "popularity.desc" } },
+
+  // Đặc sắc & Châu Á
   { category_id: "1006", category_name: "Phim Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "1000" } },
   { category_id: "1007", category_name: "Phim Hoạt Hình Chiếu Rạp", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
   { category_id: "1011", category_name: "Phim Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
@@ -197,6 +211,75 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
             results.push(item);
           }
         }
+      } else if (String(categoryId) === "1018") {
+        // 1018 Harry Potter & Fantastic Beasts (Wizarding World)
+        const [hpCol, fbCol, hpSearch] = await Promise.all([
+          fetchTmdb("/collection/1241", {}, apiKey),
+          fetchTmdb("/collection/435259", {}, apiKey),
+          fetchTmdb("/search/movie", { query: "Harry Potter" }, apiKey),
+        ]);
+        const rawList = [...(hpCol?.parts || []), ...(fbCol?.parts || []), ...(hpSearch?.results || [])];
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
+      } else if (String(categoryId) === "1019") {
+        // 1019 Lord of the Rings & The Hobbit
+        const [lotrCol, hobCol, lotrSearch] = await Promise.all([
+          fetchTmdb("/collection/119", {}, apiKey),
+          fetchTmdb("/collection/121938", {}, apiKey),
+          fetchTmdb("/search/movie", { query: "Lord of the Rings" }, apiKey),
+        ]);
+        const rawList = [...(lotrCol?.parts || []), ...(hobCol?.parts || []), ...(lotrSearch?.results || [])];
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
+      } else if (String(categoryId) === "1020") {
+        // 1020 Fast & Furious Collection
+        const [ffCol, ffSearch] = await Promise.all([
+          fetchTmdb("/collection/9485", {}, apiKey),
+          fetchTmdb("/search/movie", { query: "Fast & Furious" }, apiKey),
+        ]);
+        const rawList = [...(ffCol?.parts || []), ...(ffSearch?.results || [])];
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
+      } else if (String(categoryId) === "1021") {
+        // 1021 MonsterVerse (Godzilla & Kong)
+        const [gz, kong] = await Promise.all([
+          fetchTmdb("/search/movie", { query: "Godzilla" }, apiKey),
+          fetchTmdb("/search/movie", { query: "Kong" }, apiKey),
+        ]);
+        const rawList = [...(gz?.results || []), ...(kong?.results || [])];
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
+      } else if (String(categoryId) === "1022") {
+        // 1022 James Bond 007 Collection
+        const bondCol = await fetchTmdb("/collection/645", {}, apiKey);
+        const rawList = bondCol?.parts || [];
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
       } else {
         // Specific platform or genre category: fetch 10 pages (~200 movies)
         const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
@@ -223,6 +306,21 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         let params = { sort_by: "popularity.desc", page: "1" };
         if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
           params.primary_release_year = cat.category_id;
+        } else if (cat.query?.special === "harry_potter") {
+          const hpCol = await fetchTmdb("/collection/1241", {}, apiKey);
+          return (hpCol?.parts || []).map(item => ({ ...item, _assignedCatId: cat.category_id }));
+        } else if (cat.query?.special === "lotr") {
+          const lotrCol = await fetchTmdb("/collection/119", {}, apiKey);
+          return (lotrCol?.parts || []).map(item => ({ ...item, _assignedCatId: cat.category_id }));
+        } else if (cat.query?.special === "fast_and_furious") {
+          const ffCol = await fetchTmdb("/collection/9485", {}, apiKey);
+          return (ffCol?.parts || []).map(item => ({ ...item, _assignedCatId: cat.category_id }));
+        } else if (cat.query?.special === "monsterverse") {
+          const gz = await fetchTmdb("/search/movie", { query: "Godzilla" }, apiKey);
+          return (gz?.results || []).slice(0, 15).map(item => ({ ...item, _assignedCatId: cat.category_id }));
+        } else if (cat.query?.special === "james_bond") {
+          const bondCol = await fetchTmdb("/collection/645", {}, apiKey);
+          return (bondCol?.parts || []).slice(0, 15).map(item => ({ ...item, _assignedCatId: cat.category_id }));
         } else if (cat.query) {
           Object.assign(params, cat.query);
         }
@@ -361,10 +459,18 @@ async function getVodInfo(tmdbId, apiKey) {
  */
 const SERIES_CATEGORIES = [
   { category_id: "2026", category_name: "Series 2026", parent_id: 0, query: { first_air_date_year: "2026", sort_by: "popularity.desc" } },
-  { category_id: "1001", category_name: "Series Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "2025", category_name: "Series 2025 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2025", sort_by: "popularity.desc" } },
   { category_id: "2024", category_name: "Series 2024 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2024", sort_by: "popularity.desc" } },
   { category_id: "2023", category_name: "Series 2023 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2023", sort_by: "popularity.desc" } },
+
+  // Vũ trụ điện ảnh & Thương hiệu đình đám (Franchises & Cinematic Universes)
+  { category_id: "1015", category_name: "Series Marvel (MCU)", parent_id: 0, query: { with_companies: "420|7505", sort_by: "popularity.desc" } },
+  { category_id: "1016", category_name: "Series Star Wars", parent_id: 0, query: { with_companies: "1", sort_by: "popularity.desc" } },
+  { category_id: "1017", category_name: "Series DC Universe", parent_id: 0, query: { with_companies: "9993|429|128064", sort_by: "popularity.desc" } },
+  { category_id: "1019", category_name: "Series Game of Thrones & LOTR", parent_id: 0, query: { special: "got_lotr", sort_by: "popularity.desc" } },
+
+  // Nền tảng phát hành toàn cầu
+  { category_id: "1001", category_name: "Series Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1002", category_name: "Series Netflix", parent_id: 0, query: { with_watch_providers: "8", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1003", category_name: "Series HBO Max", parent_id: 0, query: { with_watch_providers: "1899|384", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1008", category_name: "Series Amazon Prime", parent_id: 0, query: { with_watch_providers: "9|119", watch_region: "US", sort_by: "popularity.desc" } },
@@ -372,6 +478,8 @@ const SERIES_CATEGORIES = [
   { category_id: "1010", category_name: "Series Hulu", parent_id: 0, query: { with_watch_providers: "15", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1004", category_name: "Series Disney+", parent_id: 0, query: { with_watch_providers: "337", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1005", category_name: "Series Apple TV+", parent_id: 0, query: { with_watch_providers: "350", watch_region: "US", sort_by: "popularity.desc" } },
+
+  // Đặc sắc & Châu Á
   { category_id: "1006", category_name: "Series Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "500" } },
   { category_id: "1007", category_name: "Series Anime / Hoạt Hình", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
   { category_id: "1011", category_name: "Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
@@ -434,7 +542,7 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
       results = json?.results || [];
     } else if (!isAllCategory(categoryId)) {
       const yearStr = String(categoryId);
-      if (["2026", "2025", "2024"].includes(yearStr)) {
+      if (["2026", "2025", "2024", "2023"].includes(yearStr)) {
         // Multi-angle query for ALL notable series of the year:
         // 1. Most voted series (vote_count.desc)
         // 2. High popularity trending series (popularity.desc)
@@ -447,6 +555,22 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
           ...votePages.flatMap(r => r?.results || []),
           ...popPages.flatMap(r => r?.results || []),
         ];
+        const seen = new Set();
+        for (const item of rawList) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            results.push(item);
+          }
+        }
+      } else if (String(categoryId) === "1019") {
+        // 1019 Game of Thrones & Lord of the Rings series
+        const [got, hotd, lotr, witcher] = await Promise.all([
+          fetchTmdb("/search/tv", { query: "Game of Thrones" }, apiKey),
+          fetchTmdb("/search/tv", { query: "House of the Dragon" }, apiKey),
+          fetchTmdb("/search/tv", { query: "The Rings of Power" }, apiKey),
+          fetchTmdb("/search/tv", { query: "The Witcher" }, apiKey),
+        ]);
+        const rawList = [...(got?.results || []), ...(hotd?.results || []), ...(lotr?.results || []), ...(witcher?.results || [])];
         const seen = new Set();
         for (const item of rawList) {
           if (item?.id && !seen.has(item.id)) {
@@ -488,6 +612,14 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         let params = { sort_by: "popularity.desc", page: "1" };
         if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
           params.first_air_date_year = cat.category_id;
+        } else if (cat.query?.special === "got_lotr") {
+          const [got, hotd, lotr] = await Promise.all([
+            fetchTmdb("/search/tv", { query: "Game of Thrones" }, apiKey),
+            fetchTmdb("/search/tv", { query: "House of the Dragon" }, apiKey),
+            fetchTmdb("/search/tv", { query: "The Rings of Power" }, apiKey),
+          ]);
+          const list = [...(got?.results || []), ...(hotd?.results || []), ...(lotr?.results || [])];
+          return list.map(item => ({ ...item, _assignedCatId: cat.category_id }));
         } else if (cat.query) {
           Object.assign(params, cat.query);
         }
