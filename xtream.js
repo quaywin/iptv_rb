@@ -505,6 +505,28 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const hasPageParam = pageRaw !== null && pageRaw !== undefined && pageRaw !== "";
       const page = parseInt(pageRaw || "1", 10) || 1;
       const search = extractSearchQuery(params);
+
+      // Block bulk load-all requests if disableBulkVod is enabled.
+      // This returns HTTP 501, which triggers native sliceByCategory fallback in OwnTV and other clients.
+      const disableBulkVod = config?.disableBulkVod !== false;
+      const isBulkRequest = isAllCategory(catId) && !hasPageParam && !search;
+      if (isBulkRequest && disableBulkVod) {
+        console.log(`[XTREAM ${timeStr}] 🚫 Bulk get_vod_streams rejected (501) to force per-category sync`);
+        return Response.json(
+          {
+            error: "Bulk VOD stream loading is disabled to prevent Cloudflare subrequest limits. Please query per category_id.",
+            status: 501,
+          },
+          {
+            status: 501,
+            headers: {
+              ...CORS_HEADERS,
+              "Content-Type": "application/json; charset=utf-8",
+            },
+          }
+        );
+      }
+
       const streams = await getVodStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
       console.log(`[XTREAM ${timeStr}] 🎬 get_vod_streams (category: "${catId || "all"}", page: ${page}, search: "${search || ""}") -> ${streams.length} movies`);
       return Response.json(streams, {
@@ -550,6 +572,28 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const hasPageParam = pageRaw !== null && pageRaw !== undefined && pageRaw !== "";
       const page = parseInt(pageRaw || "1", 10) || 1;
       const search = extractSearchQuery(params);
+
+      // Block bulk load-all series requests if disableBulkVod is enabled.
+      // This returns HTTP 501, which triggers native sliceByCategory fallback in OwnTV and other clients.
+      const disableBulkVod = config?.disableBulkVod !== false;
+      const isBulkRequest = isAllCategory(catId) && !hasPageParam && !search;
+      if (isBulkRequest && disableBulkVod) {
+        console.log(`[XTREAM ${timeStr}] 🚫 Bulk get_series rejected (501) to force per-category sync`);
+        return Response.json(
+          {
+            error: "Bulk series stream loading is disabled to prevent Cloudflare subrequest limits. Please query per category_id.",
+            status: 501,
+          },
+          {
+            status: 501,
+            headers: {
+              ...CORS_HEADERS,
+              "Content-Type": "application/json; charset=utf-8",
+            },
+          }
+        );
+      }
+
       const series = await getSeriesStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
       console.log(`[XTREAM ${timeStr}] 🍿 get_series (category: "${catId || "all"}", page: ${page}, search: "${search || ""}") -> ${series.length} series`);
       return Response.json(series, {

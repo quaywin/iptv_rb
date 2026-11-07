@@ -37,6 +37,7 @@ function buildRuntimeConfig(env) {
     hoursAhead: env.HOURS_AHEAD ? parseInt(env.HOURS_AHEAD, 10) : undefined,
     cdnHoursAhead: env.CDN_HOURS_AHEAD ? parseInt(env.CDN_HOURS_AHEAD, 10) : 72,
     cdnIncludeOffline: env.CDN_INCLUDE_OFFLINE !== undefined ? (env.CDN_INCLUDE_OFFLINE === "true" || env.CDN_INCLUDE_OFFLINE === "1") : true,
+    disableBulkVod: env.DISABLE_BULK_VOD !== undefined ? (env.DISABLE_BULK_VOD === "true" || env.DISABLE_BULK_VOD === "1") : true,
     maxChannelsPerEvent: env.MAX_CHANNELS_PER_EVENT !== undefined ? parseInt(env.MAX_CHANNELS_PER_EVENT, 10) : undefined,
   };
 }

@@ -202,35 +202,75 @@ https://stream.example.com/skypl/index.m3u8
     throw new Error("Failed get_vod_streams");
   }
 
-  // 4b-1. Test VOD category_id=all (Loads "All" tab properly)
+  // 4b-1. Test Bulk VOD with disableBulkVod=true (returns 501 to force per-category sync)
+  const vodBulk501Req = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_vod_streams`);
+  const vodBulk501Res = await handleXtreamRequest({
+    req: vodBulk501Req,
+    url: new URL(vodBulk501Req.url),
+    config: { ...config, disableBulkVod: true },
+    getOrGeneratePlaylist: dummyGetOrGenerate,
+  });
+  console.log("Bulk VOD with disableBulkVod=true status:", vodBulk501Res.status, vodBulk501Res.status === 501 ? "PASSED (501 Not Implemented)" : "FAILED");
+  if (vodBulk501Res.status !== 501) {
+    throw new Error("Expected 501 for bulk get_vod_streams when disableBulkVod is true");
+  }
+
+  // 4b-2. Test Bulk Series with disableBulkVod=true (returns 501 to force per-category sync)
+  const seriesBulk501Req = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_series`);
+  const seriesBulk501Res = await handleXtreamRequest({
+    req: seriesBulk501Req,
+    url: new URL(seriesBulk501Req.url),
+    config: { ...config, disableBulkVod: true },
+    getOrGeneratePlaylist: dummyGetOrGenerate,
+  });
+  console.log("Bulk Series with disableBulkVod=true status:", seriesBulk501Res.status, seriesBulk501Res.status === 501 ? "PASSED (501 Not Implemented)" : "FAILED");
+  if (seriesBulk501Res.status !== 501) {
+    throw new Error("Expected 501 for bulk get_series when disableBulkVod is true");
+  }
+
+  // 4b-3. Test Per-Category VOD (Loads ~200 items for specific category)
+  const vodPerCatReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_vod_streams&category_id=1004`);
+  const vodPerCatRes = await handleXtreamRequest({
+    req: vodPerCatReq,
+    url: new URL(vodPerCatReq.url),
+    config,
+    getOrGeneratePlaylist: dummyGetOrGenerate,
+  });
+  const vodPerCatStreams = await vodPerCatRes.json();
+  console.log(`Per-category VOD (category_id=1004) count:`, vodPerCatStreams.length, vodPerCatStreams.length >= 100 ? "PASSED" : "FAILED");
+  if (vodPerCatRes.status !== 200 || !Array.isArray(vodPerCatStreams) || vodPerCatStreams.length === 0) {
+    throw new Error("Failed get_vod_streams for category_id=1004");
+  }
+
+  // 4b-4. Test Bulk VOD with disableBulkVod=false (fallback mode)
   const vodAllReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_vod_streams&category_id=all`);
   const vodAllRes = await handleXtreamRequest({
     req: vodAllReq,
     url: new URL(vodAllReq.url),
-    config,
+    config: { ...config, disableBulkVod: false },
     getOrGeneratePlaylist: dummyGetOrGenerate,
   });
   const vodAllStreams = await vodAllRes.json();
-  console.log(`VOD 'All' Streams Count:`, vodAllStreams.length, vodAllStreams.length > 0 ? "PASSED" : "FAILED");
+  console.log(`VOD 'All' Streams Count (disableBulkVod=false):`, vodAllStreams.length, vodAllStreams.length > 0 ? "PASSED" : "FAILED");
   if (!Array.isArray(vodAllStreams) || vodAllStreams.length === 0) {
-    throw new Error("Failed get_vod_streams with category_id=all");
+    throw new Error("Failed get_vod_streams with category_id=all when disableBulkVod=false");
   }
   // Verify sorted newest to oldest
   const isSorted = parseInt(vodAllStreams[0].added, 10) >= parseInt(vodAllStreams[1].added, 10);
   console.log("VOD sorted newest to oldest check:", isSorted ? "PASSED" : "FAILED");
 
-  // 4b-2. Test Series category_id=all
+  // 4b-5. Test Series category_id=all with disableBulkVod=false
   const seriesAllReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_series&category_id=all`);
   const seriesAllRes = await handleXtreamRequest({
     req: seriesAllReq,
     url: new URL(seriesAllReq.url),
-    config,
+    config: { ...config, disableBulkVod: false },
     getOrGeneratePlaylist: dummyGetOrGenerate,
   });
   const seriesAllStreams = await seriesAllRes.json();
-  console.log(`Series 'All' Streams Count:`, seriesAllStreams.length, seriesAllStreams.length > 0 ? "PASSED" : "FAILED");
+  console.log(`Series 'All' Streams Count (disableBulkVod=false):`, seriesAllStreams.length, seriesAllStreams.length > 0 ? "PASSED" : "FAILED");
   if (!Array.isArray(seriesAllStreams) || seriesAllStreams.length === 0) {
-    throw new Error("Failed get_series with category_id=all");
+    throw new Error("Failed get_series with category_id=all when disableBulkVod=false");
   }
 
   // 4b-3. Test Pagination (page=1, page=2)
@@ -362,7 +402,7 @@ https://stream.example.com/skypl/index.m3u8
   }
 
   // 5b. action=get_series_streams alias
-  const seriesStreamsReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_series_streams`);
+  const seriesStreamsReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_series_streams&category_id=1001`);
   const seriesStreamsRes = await handleXtreamRequest({
     req: seriesStreamsReq,
     url: new URL(seriesStreamsReq.url),
