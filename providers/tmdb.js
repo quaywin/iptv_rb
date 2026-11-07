@@ -88,6 +88,12 @@ const VOD_CATEGORIES = [
   { category_id: "1007", category_name: "Phim Hoạt Hình Chiếu Rạp", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
   { category_id: "1011", category_name: "Phim Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
 
+  // Thiếu nhi & Hoạt hình theo lứa tuổi (Kids & Family by Age)
+  { category_id: "1030", category_name: "👶 Thiếu Nhi Mầm Non (0-5 tuổi)", parent_id: 0, query: { certification_country: "US", certification: "G", with_genres: "16|10751", sort_by: "popularity.desc" } },
+  { category_id: "1031", category_name: "🧒 Thiếu Nhi Tiểu Học (6-11 tuổi)", parent_id: 0, query: { certification_country: "US", certification: "PG", with_genres: "16|10751", sort_by: "popularity.desc" } },
+  { category_id: "1032", category_name: "🧑‍🎓 Thiếu Niên & Tuổi Teen (12+)", parent_id: 0, query: { certification_country: "US", certification: "PG-13", with_genres: "16|12", "vote_count.gte": "100", sort_by: "popularity.desc" } },
+  { category_id: "1033", category_name: "🏰 Hoạt Hình Disney & Pixar", parent_id: 0, query: { with_companies: "2|3", with_genres: "16|10751", sort_by: "popularity.desc" } },
+
   // Nền tảng phát hành toàn cầu
   { category_id: "1001", category_name: "Phim Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1002", category_name: "Phim Netflix", parent_id: 0, query: { with_watch_providers: "8", watch_region: "US", sort_by: "popularity.desc" } },
@@ -496,6 +502,12 @@ const SERIES_CATEGORIES = [
   { category_id: "1006", category_name: "Series Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "500" } },
   { category_id: "1007", category_name: "Series Anime / Hoạt Hình", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
   { category_id: "1011", category_name: "Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
+
+  // Thiếu nhi & Hoạt hình theo lứa tuổi (Kids & Family by Age)
+  { category_id: "1030", category_name: "👶 Series Mầm Non (0-5 tuổi)", parent_id: 0, query: { certification_country: "US", certification: "TV-Y", with_genres: "10762|16", sort_by: "popularity.desc" } },
+  { category_id: "1031", category_name: "🧒 Series Thiếu Nhi (6-11 tuổi)", parent_id: 0, query: { certification_country: "US", certification: "TV-Y7|TV-G", with_genres: "10762|16", sort_by: "popularity.desc" } },
+  { category_id: "1032", category_name: "🧑‍🎓 Series Thiếu Niên & Teen (12+)", parent_id: 0, query: { with_genres: "16,10759", sort_by: "popularity.desc" } },
+  { category_id: "1033", category_name: "🏰 Series Hoạt Hình Disney", parent_id: 0, query: { with_networks: "54|2739|255", with_genres: "10762|16", sort_by: "popularity.desc" } },
 
   // Nền tảng phát hành toàn cầu
   { category_id: "1001", category_name: "Series Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
