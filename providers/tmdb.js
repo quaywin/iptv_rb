@@ -62,10 +62,14 @@ async function fetchTmdb(endpoint, params = {}, apiKey = DEFAULT_TMDB_API_KEY, t
  * Curated VOD Categories (Cinema by year, Streaming Platforms, All-Time Acclaimed)
  */
 const VOD_CATEGORIES = [
+  { category_id: "1000", category_name: "🔥 Đang Thịnh Hành (Hot Tuần)", parent_id: 0, query: { endpoint: "/trending/movie/week" } },
   { category_id: "2026", category_name: "Phim Chiếu Rạp 2026", parent_id: 0, query: { primary_release_year: "2026", sort_by: "popularity.desc" } },
   { category_id: "2025", category_name: "Phim 2025 (Nổi Bật)", parent_id: 0, query: { primary_release_year: "2025", sort_by: "popularity.desc" } },
   { category_id: "2024", category_name: "Phim 2024 (Nổi Bật)", parent_id: 0, query: { primary_release_year: "2024", sort_by: "popularity.desc" } },
   { category_id: "2023", category_name: "Phim 2023 (Nổi Bật)", parent_id: 0, query: { primary_release_year: "2023", sort_by: "popularity.desc" } },
+
+  // Điện ảnh Việt Nam
+  { category_id: "1023", category_name: "Phim Chiếu Rạp Việt Nam", parent_id: 0, query: { with_original_language: "vi", sort_by: "popularity.desc" } },
 
   // Vũ trụ điện ảnh & Thương hiệu đình đám (Franchises & Cinematic Universes)
   { category_id: "1015", category_name: "Vũ Trụ Marvel (MCU)", parent_id: 0, query: { with_companies: "420|7505", sort_by: "popularity.desc" } },
@@ -77,6 +81,13 @@ const VOD_CATEGORIES = [
   { category_id: "1021", category_name: "Vũ Trụ MonsterVerse (Godzilla & Kong)", parent_id: 0, query: { special: "monsterverse", sort_by: "popularity.desc" } },
   { category_id: "1022", category_name: "Điệp Viên 007 (James Bond)", parent_id: 0, query: { special: "james_bond", sort_by: "popularity.desc" } },
 
+  // Tuyệt tác & Hoạt hình đỉnh cao
+  { category_id: "1025", category_name: "Tuyệt Tác IMDb Top 250", parent_id: 0, query: { sort_by: "vote_average.desc", "vote_count.gte": "8000" } },
+  { category_id: "1024", category_name: "Hoạt Hình Studio Ghibli", parent_id: 0, query: { with_companies: "10342", sort_by: "popularity.desc" } },
+  { category_id: "1006", category_name: "Phim Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "1000" } },
+  { category_id: "1007", category_name: "Phim Hoạt Hình Chiếu Rạp", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
+  { category_id: "1011", category_name: "Phim Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
+
   // Nền tảng phát hành toàn cầu
   { category_id: "1001", category_name: "Phim Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1002", category_name: "Phim Netflix", parent_id: 0, query: { with_watch_providers: "8", watch_region: "US", sort_by: "popularity.desc" } },
@@ -87,10 +98,7 @@ const VOD_CATEGORIES = [
   { category_id: "1004", category_name: "Phim Disney+", parent_id: 0, query: { with_watch_providers: "337", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1005", category_name: "Phim Apple TV+", parent_id: 0, query: { with_watch_providers: "350", watch_region: "US", sort_by: "popularity.desc" } },
 
-  // Đặc sắc & Châu Á
-  { category_id: "1006", category_name: "Phim Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "1000" } },
-  { category_id: "1007", category_name: "Phim Hoạt Hình Chiếu Rạp", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
-  { category_id: "1011", category_name: "Phim Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
+  // Điện ảnh Châu Á
   { category_id: "1012", category_name: "Phim Châu Á Nổi Bật", parent_id: 0, query: { with_original_language: "ko|zh|ja|th|vi", sort_by: "popularity.desc" } },
   { category_id: "1013", category_name: "Phim Hàn Quốc (K-Movie)", parent_id: 0, query: { with_original_language: "ko", sort_by: "popularity.desc" } },
   { category_id: "1014", category_name: "Phim Trung Quốc & HK", parent_id: 0, query: { with_original_language: "zh", sort_by: "popularity.desc" } },
@@ -157,6 +165,9 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
       if (!isAllCategory(categoryId)) {
         const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
         if (catDef) {
+          if (catDef.query?.endpoint) {
+            endpoint = catDef.query.endpoint;
+          }
           Object.assign(baseParams, catDef.query);
         } else {
           baseParams.with_genres = String(categoryId);
@@ -284,6 +295,9 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         // Specific platform or genre category: fetch 10 pages (~200 movies)
         const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
         if (catDef) {
+          if (catDef.query?.endpoint) {
+            endpoint = catDef.query.endpoint;
+          }
           Object.assign(baseParams, catDef.query);
         } else {
           baseParams.with_genres = String(categoryId);
@@ -303,8 +317,12 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
     } else {
       // ALL category initial catalog: fetch from each curated category so the app's local SQLite DB has items for ALL categories
       const categoryFetches = VOD_CATEGORIES.map(async (cat) => {
+        let catEndpoint = "/discover/movie";
         let params = { sort_by: "popularity.desc", page: "1" };
-        if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
+        if (cat.query?.endpoint) {
+          catEndpoint = cat.query.endpoint;
+          params = { page: "1" };
+        } else if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
           params.primary_release_year = cat.category_id;
         } else if (cat.query?.special === "harry_potter") {
           const hpCol = await fetchTmdb("/collection/1241", {}, apiKey);
@@ -324,7 +342,7 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         } else if (cat.query) {
           Object.assign(params, cat.query);
         }
-        const json = await fetchTmdb("/discover/movie", params, apiKey);
+        const json = await fetchTmdb(catEndpoint, params, apiKey);
         const list = json?.results || [];
         return list.map(item => ({ ...item, _assignedCatId: cat.category_id }));
       });
@@ -458,16 +476,26 @@ async function getVodInfo(tmdbId, apiKey) {
  * Curated Series Categories (TV Shows by year, Streaming Platforms, All-Time Acclaimed)
  */
 const SERIES_CATEGORIES = [
+  { category_id: "1000", category_name: "🔥 Series Thịnh Hành (Hot Tuần)", parent_id: 0, query: { endpoint: "/trending/tv/week" } },
   { category_id: "2026", category_name: "Series 2026", parent_id: 0, query: { first_air_date_year: "2026", sort_by: "popularity.desc" } },
   { category_id: "2025", category_name: "Series 2025 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2025", sort_by: "popularity.desc" } },
   { category_id: "2024", category_name: "Series 2024 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2024", sort_by: "popularity.desc" } },
   { category_id: "2023", category_name: "Series 2023 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2023", sort_by: "popularity.desc" } },
+
+  // Phim bộ Việt Nam
+  { category_id: "1023", category_name: "Phim Bộ & Truyền Hình Việt Nam", parent_id: 0, query: { with_original_language: "vi", sort_by: "popularity.desc" } },
 
   // Vũ trụ điện ảnh & Thương hiệu đình đám (Franchises & Cinematic Universes)
   { category_id: "1015", category_name: "Series Marvel (MCU)", parent_id: 0, query: { with_companies: "420|7505", sort_by: "popularity.desc" } },
   { category_id: "1016", category_name: "Series Star Wars", parent_id: 0, query: { with_companies: "1", sort_by: "popularity.desc" } },
   { category_id: "1017", category_name: "Series DC Universe", parent_id: 0, query: { with_companies: "9993|429|128064", sort_by: "popularity.desc" } },
   { category_id: "1019", category_name: "Series Game of Thrones & LOTR", parent_id: 0, query: { special: "got_lotr", sort_by: "popularity.desc" } },
+
+  // Tuyệt tác đỉnh cao
+  { category_id: "1025", category_name: "Series Tuyệt Tác IMDb Top", parent_id: 0, query: { sort_by: "vote_average.desc", "vote_count.gte": "1500" } },
+  { category_id: "1006", category_name: "Series Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "500" } },
+  { category_id: "1007", category_name: "Series Anime / Hoạt Hình", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
+  { category_id: "1011", category_name: "Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
 
   // Nền tảng phát hành toàn cầu
   { category_id: "1001", category_name: "Series Peacock", parent_id: 0, query: { with_watch_providers: "386|387", watch_region: "US", sort_by: "popularity.desc" } },
@@ -479,10 +507,7 @@ const SERIES_CATEGORIES = [
   { category_id: "1004", category_name: "Series Disney+", parent_id: 0, query: { with_watch_providers: "337", watch_region: "US", sort_by: "popularity.desc" } },
   { category_id: "1005", category_name: "Series Apple TV+", parent_id: 0, query: { with_watch_providers: "350", watch_region: "US", sort_by: "popularity.desc" } },
 
-  // Đặc sắc & Châu Á
-  { category_id: "1006", category_name: "Series Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "500" } },
-  { category_id: "1007", category_name: "Series Anime / Hoạt Hình", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
-  { category_id: "1011", category_name: "Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
+  // Điện ảnh Châu Á
   { category_id: "1012", category_name: "Series Châu Á Nổi Bật", parent_id: 0, query: { with_original_language: "ko|zh|ja|th|vi", sort_by: "popularity.desc" } },
   { category_id: "1013", category_name: "Series Hàn Quốc (K-Drama)", parent_id: 0, query: { with_original_language: "ko", sort_by: "popularity.desc" } },
   { category_id: "1014", category_name: "Series Trung Quốc (C-Drama)", parent_id: 0, query: { with_original_language: "zh", sort_by: "popularity.desc" } },
@@ -533,6 +558,9 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
       if (!isAllCategory(categoryId)) {
         const catDef = SERIES_CATEGORIES.find(c => c.category_id === String(categoryId));
         if (catDef) {
+          if (catDef.query?.endpoint) {
+            endpoint = catDef.query.endpoint;
+          }
           Object.assign(baseParams, catDef.query);
         } else {
           baseParams.with_genres = String(categoryId);
@@ -582,6 +610,9 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         // Specific platform or genre category: fetch 10 pages (~200 series)
         const catDef = SERIES_CATEGORIES.find(c => c.category_id === String(categoryId));
         if (catDef) {
+          if (catDef.query?.endpoint) {
+            endpoint = catDef.query.endpoint;
+          }
           Object.assign(baseParams, catDef.query);
         } else {
           baseParams.with_genres = String(categoryId);
@@ -609,8 +640,12 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
     } else {
       // ALL category initial catalog: fetch from each curated category so the app's local SQLite DB has items for ALL categories
       const categoryFetches = SERIES_CATEGORIES.map(async (cat) => {
+        let catEndpoint = "/discover/tv";
         let params = { sort_by: "popularity.desc", page: "1" };
-        if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
+        if (cat.query?.endpoint) {
+          catEndpoint = cat.query.endpoint;
+          params = { page: "1" };
+        } else if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
           params.first_air_date_year = cat.category_id;
         } else if (cat.query?.special === "got_lotr") {
           const [got, hotd, lotr] = await Promise.all([
@@ -623,7 +658,7 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         } else if (cat.query) {
           Object.assign(params, cat.query);
         }
-        const json = await fetchTmdb("/discover/tv", params, apiKey);
+        const json = await fetchTmdb(catEndpoint, params, apiKey);
         const list = json?.results || [];
         return list.map(item => ({ ...item, _assignedCatId: cat.category_id }));
       });
