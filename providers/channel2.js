@@ -121,7 +121,7 @@ async function generateSportsbitePlaylist(customConfig = {}) {
   console.log("Starting SportsBite /channel2 playlist generation...");
   const channels = await fetchSportsbiteChannels(cfg);
 
-  const epgUrl = cfg.channel2EpgUrl || cfg.epgUrl || "https://iptv-epg.org/files/epg-us.xml.gz,https://iptv-epg.org/files/epg-gb.xml.gz";
+  const epgUrl = cfg.channel2EpgUrl || cfg.epgUrl || "https://iptv-epg.org/files/epg-us.xml.gz,https://iptv-epg.org/files/epg-gb.xml.gz,https://iptv-epg.org/files/epg-nz.xml.gz,https://iptv-epg.org/files/epg-au.xml.gz,https://iptv-epg.org/files/epg-es.xml.gz,https://iptv-epg.org/files/epg-it.xml.gz,https://iptv-epg.org/files/epg-pl.xml.gz,https://iptv-epg.org/files/epg-pt.xml.gz,https://iptv-epg.org/files/epg-fr.xml.gz,https://iptv-epg.org/files/epg-de.xml.gz";
   const epgHeader = epgUrl ? `url-tvg="${epgUrl}" x-tvg-url="${epgUrl}" ` : "";
 
   if (!channels.length) {
