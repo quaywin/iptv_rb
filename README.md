@@ -33,7 +33,7 @@ A Bun-based high-performance IPTV solution that automatically generates playlist
   - `channel3.js`: Handler for `vidcdn.vip` 980+ 24/7 TV channels grouped by 48+ countries.
   - `gk.js`: Handler for `api.reedstreams.link` (ReedStreams / GK).
   - `pit.js`: Handler for `pitsport.st` (PitSport live & upcoming matches / racing).
-  - `cine.js`: Handler for `cinevid.st` (Cinevid live sports events & schedule).
+  - `cine.js`: Handler for `cinevid.pro` (Cinevid live sports events & schedule).
   - `dam.js`: Handler for `ondemand.st` (DAMITV live sports & 24/7 channels).
   - `sports247.js`: Handler for `en.sports247.ru` / Matchora API (Live sports events & multi-server matchora embeds).
   - `channel4.js`: Handler for `en.sports247.ru/channels` / Matchora API (2,700+ 24/7 TV channels across 63 countries).
@@ -141,7 +141,7 @@ Add the playlist URL to your favorite IPTV player (TiviMate, VLC, OTT Navigator)
   https://iptv-140.pages.dev/pit
   ```
 
-- **Cinevid Provider** (`cinevid.st/api/public/events`):
+- **Cinevid Provider** (`cinevid.pro/api/public/events`):
   ```text
   https://iptv-140.pages.dev/cine
   ```

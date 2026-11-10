@@ -11,20 +11,75 @@ const {
 } = require("../utils/helpers");
 
 /**
+ * Query Cinevid live status API to discover newly announced active domains
+ */
+async function fetchActiveCineDomains(cfg) {
+  try {
+    const statusUrl = cfg.cineStatusUrl || "https://cinevid.link/api/status";
+    const res = await fetch(statusUrl, {
+      signal: AbortSignal.timeout(cfg.timeout || 4000),
+      headers: { "User-Agent": cfg.userAgent },
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    if (!Array.isArray(json.domains)) return [];
+    return json.domains
+      .filter(d => d && d.domain && (!d.last || d.last.ok !== false))
+      .map(d => `https://${d.domain}`);
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
  * Fetch live and upcoming events from Cinevid API with multi-mirror fallback
  */
 async function fetchCineStreamList(cfg) {
   try {
-    const cineUrl = cfg.cineApiUrl || "https://cinevid.st/api/public/events";
+    const cineUrl = cfg.cineApiUrl || "https://cinevid.pro/api/public/events";
     const urls = buildCandidateUrls(cineUrl, PROVIDER_MIRRORS.cine);
     console.log(`Fetching Cinevid streams (primary: ${cineUrl}, candidates: ${urls.length})`);
 
-    const json = await fetchWithFallback(urls, {
-      timeoutMs: cfg.timeout || 6000,
-      headers: {
-        "User-Agent": cfg.userAgent,
-      },
-    });
+    let resObj;
+    try {
+      resObj = await fetchWithFallback(urls, {
+        timeoutMs: cfg.timeout || 6000,
+        headers: {
+          "User-Agent": cfg.userAgent,
+        },
+        detailed: true,
+      });
+    } catch (fallbackErr) {
+      console.warn("Cinevid static mirrors failed, querying live status from cinevid.link...");
+      const liveHosts = await fetchActiveCineDomains(cfg);
+      if (liveHosts.length) {
+        const dynamicUrls = buildCandidateUrls(
+          `${liveHosts[0]}/api/public/events`,
+          liveHosts
+        );
+        resObj = await fetchWithFallback(dynamicUrls, {
+          timeoutMs: cfg.timeout || 6000,
+          headers: { "User-Agent": cfg.userAgent },
+          detailed: true,
+        });
+      } else {
+        throw fallbackErr;
+      }
+    }
+
+    const json = resObj.data || resObj;
+    let baseOrigin = "https://cinevid.pro";
+    try {
+      if (resObj.url) {
+        const u = new URL(resObj.url);
+        if (u.pathname.includes("/proxy-chunk")) {
+          const target = u.searchParams.get("url");
+          if (target) baseOrigin = new URL(target).origin;
+        } else {
+          baseOrigin = u.origin;
+        }
+      }
+    } catch (e) {}
 
     const rawEvents = Array.isArray(json) ? json : (json.events || []);
 
@@ -41,11 +96,11 @@ async function fetchCineStreamList(cfg) {
       const starts_at = parseCineTime(e.date, e.time);
       const playUrl = e.playerUrl.startsWith("http")
         ? e.playerUrl
-        : `https://cinevid.st${e.playerUrl}`;
+        : `${baseOrigin}${e.playerUrl}`;
 
       let defaultLogo = e.homeTeamImage || e.thumbnail || e.awayTeamImage || "";
       if (defaultLogo && defaultLogo.startsWith("/")) {
-        defaultLogo = `https://cinevid.st${defaultLogo}`;
+        defaultLogo = `${baseOrigin}${defaultLogo}`;
       }
 
       validEvents.push({

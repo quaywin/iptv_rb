@@ -150,7 +150,7 @@ async function generateVidcdnPlaylist(customConfig = {}) {
     scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
   }
   const separator = scrapeBase.includes("?") ? "&" : "?";
-  const embedBase = cfg.cineEmbedChannelBaseUrl || "https://cinevid.st/embed/channel";
+  const embedBase = cfg.cineEmbedChannelBaseUrl || "https://cinevid.pro/embed/channel";
 
   for (const ch of channels) {
     const embedUrl = `${embedBase}/${ch.id}`;

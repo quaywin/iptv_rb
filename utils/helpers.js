@@ -314,7 +314,7 @@ function getLeagueLogo(leagueName, fallbackLogo = "") {
 // Default mirror hosts for popular stream services
 const PROVIDER_MIRRORS = {
   strm: ["https://strmfree.st", "https://strmfree.to", "https://strmfree.is", "https://strmfree.ws", "https://streamfree.to"],
-  cine: ["https://cinevid.st", "https://cinevid.to", "https://cinevid.is", "https://cinevid.ws"],
+  cine: ["https://cinevid.pro", "https://cinevid.sbs", "https://cinevid.st", "https://cinevid.to", "https://cinevid.is", "https://cinevid.ws"],
   dam: ["https://ondemand.st", "https://ondemand.to", "https://ondemand.is", "https://damitv.st", "https://damitv.to"],
   tim: ["https://tim-streams.com"],
   gk: ["https://api.reedstreams.link", "https://reedstreams.link", "https://api.reedstreams.to", "https://api.reedstreams.is"],
@@ -504,6 +504,9 @@ async function fetchWithFallback(urls, options = {}) {
       const data = responseType === "json" ? await res.json() : await res.text();
       const latencyMs = Date.now() - startTime;
       recordHostSuccess(url, latencyMs);
+      if (options.detailed) {
+        return { data, url, status: res.status };
+      }
       return data;
     } catch (err) {
       lastError = err;
