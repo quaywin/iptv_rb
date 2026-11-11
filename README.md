@@ -243,8 +243,8 @@ The Xtream Codes API now includes full support for **Movies (VOD)** and **TV Ser
 In `.env`:
 ```env
 TMDB_API_KEY=your_tmdb_api_key_here
-VOD_RESOLVER_URL=https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fvidnest.fun%2Fmovie%2F{tmdbId}
-SERIES_RESOLVER_URL=https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fvidnest.fun%2Ftv%2F{tmdbId}%2F{season}%2F{episode}
+VOD_RESOLVER_URL=https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Fmovie%2F{tmdbId}
+SERIES_RESOLVER_URL=https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Ftv%2F{tmdbId}%2F{season}%2F{episode}
 ```
 
 ---

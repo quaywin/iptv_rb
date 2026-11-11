@@ -967,6 +967,8 @@ async function getSeriesInfo(seriesId, apiKey) {
  * Build resolver URL for VOD movie.
  * No proxy=true: scrape-video 302s straight to the resolved stream instead of
  * relaying chunks through the proxy.
+ * Cinejoy (https://cinejoy.pk) provides high quality streams (up to 4K HLS) with
+ * multi-language audio & subtitles, resolved via scrape-video.
  * NOTE on backup mirrors: VidSrc-style players (player.videasy.ws) are not
  * usable from the VPS — their source API blocks datacenter IPs and their
  * stream tokens are IP-bound (fetching from a different IP returns 403), so
@@ -974,7 +976,7 @@ async function getSeriesInfo(seriesId, apiKey) {
  * scrape-video `fallback` param stays available for future direct-mode mirrors.
  */
 function buildVodResolverUrl(tmdbId, template = "") {
-  const defaultTemplate = "https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fvidnest.fun%2Fmovie%2F{tmdbId}";
+  const defaultTemplate = "https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Fmovie%2F{tmdbId}";
   const tpl = template || defaultTemplate;
   return tpl.replace(/\{tmdbId\}/g, String(tmdbId));
 }
@@ -983,7 +985,7 @@ function buildVodResolverUrl(tmdbId, template = "") {
  * Build resolver URL for Series TV episode (see buildVodResolverUrl notes).
  */
 function buildSeriesResolverUrl(tmdbId, season, episode, template = "") {
-  const defaultTemplate = "https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fvidnest.fun%2Ftv%2F{tmdbId}%2F{season}%2F{episode}";
+  const defaultTemplate = "https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Ftv%2F{tmdbId}%2F{season}%2F{episode}";
   const tpl = template || defaultTemplate;
   return tpl
     .replace(/\{tmdbId\}/g, String(tmdbId))
