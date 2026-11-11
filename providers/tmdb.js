@@ -977,7 +977,12 @@ async function getSeriesInfo(seriesId, apiKey) {
  */
 function buildVodResolverUrl(tmdbId, template = "") {
   const defaultTemplate = "https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Fmovie%2F{tmdbId}";
-  const tpl = template || defaultTemplate;
+  let tpl = template || defaultTemplate;
+  if (tpl.includes("vidnest.fun")) {
+    tpl = tpl
+      .replace(/vidnest\.fun%2Fmovie%2F/g, "cinejoy.pk%2Fwatch%2Fmovie%2F")
+      .replace(/vidnest\.fun\/movie\//g, "cinejoy.pk/watch/movie/");
+  }
   return tpl.replace(/\{tmdbId\}/g, String(tmdbId));
 }
 
@@ -986,7 +991,12 @@ function buildVodResolverUrl(tmdbId, template = "") {
  */
 function buildSeriesResolverUrl(tmdbId, season, episode, template = "") {
   const defaultTemplate = "https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Ftv%2F{tmdbId}%2F{season}%2F{episode}";
-  const tpl = template || defaultTemplate;
+  let tpl = template || defaultTemplate;
+  if (tpl.includes("vidnest.fun")) {
+    tpl = tpl
+      .replace(/vidnest\.fun%2Ftv%2F/g, "cinejoy.pk%2Fwatch%2Ftv%2F")
+      .replace(/vidnest\.fun\/tv\//g, "cinejoy.pk/watch/tv/");
+  }
   return tpl
     .replace(/\{tmdbId\}/g, String(tmdbId))
     .replace(/\{season\}/g, String(season))
