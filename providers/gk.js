@@ -109,8 +109,14 @@ async function generateGkPlaylist(customConfig = {}) {
 
   console.log(`Filtered and sorted ${activeMatches.length} active GK streams.`);
 
+  let scrapeBase = cfg.scrapeServiceUrl;
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
+    const join = scrapeBase.includes("?") ? "&" : "?";
+    scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
+  }
+  const separator = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
+
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
-  const separator = cfg.scrapeServiceUrl.includes("?") ? "&" : "?";
 
   for (const m of activeMatches) {
     const sportIcon = getSportIcon(m.category, "gk");
@@ -127,7 +133,7 @@ async function generateGkPlaylist(customConfig = {}) {
     const groupTitle = m.leagueName || capitalize(m.category) || "Sports";
     const defaultLogo = m.poster || "";
     const logo = getLeagueLogo(m.leagueName || m.category, defaultLogo);
-    const scrapeUrl = `${cfg.scrapeServiceUrl}${separator}url=${encodeURIComponent(m.embedUrl)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(m.embedUrl)}` : m.embedUrl;
 
     m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

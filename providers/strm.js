@@ -157,9 +157,13 @@ async function generateStrmPlaylist(customConfig = {}) {
     const logo = getLeagueLogo(stream.league, defaultLogo);
 
     const embedUrl = `${cfg.embedBaseUrl}/${category}/${stream.stream_key}1080p`;
-    const scrapeBase = cfg.strmScrapeServiceUrl || cfg.scrapeServiceUrl;
-    const sep = scrapeBase.includes("?") ? "&" : "?";
-    const scrapeUrl = `${scrapeBase}${sep}url=${encodeURIComponent(embedUrl)}`;
+    let scrapeBase = cfg.strmScrapeServiceUrl || cfg.scrapeServiceUrl;
+    if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
+      const join = scrapeBase.includes("?") ? "&" : "?";
+      scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
+    }
+    const sep = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${sep}url=${encodeURIComponent(embedUrl)}` : embedUrl;
 
     m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

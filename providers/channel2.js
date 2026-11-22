@@ -82,7 +82,8 @@ function getSportsbiteChannelCountry(ch) {
 /**
  * Fetch 24/7 channels from SportsBite API with multi-mirror fallback
  */
-async function fetchSportsbiteChannels(cfg) {
+async function fetchSportsbiteChannels(customConfig = {}) {
+  const cfg = mergeConfig(customConfig);
   try {
     const apiUrl = cfg.sportsbiteChannelsUrl || "https://sportsbite.org/api/forestgump/channels";
     const urls = buildCandidateUrls(apiUrl, PROVIDER_MIRRORS.sportsbite);
@@ -140,8 +141,14 @@ async function generateSportsbitePlaylist(customConfig = {}) {
     return (a.name || "").localeCompare(b.name || "");
   });
 
+  let scrapeBase = cfg.scrapeServiceUrl;
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
+    const join = scrapeBase.includes("?") ? "&" : "?";
+    scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
+  }
+  const separator = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
+
   let m3uContent = `#EXTM3U ${epgHeader}tvg-shift=0 m3uautoload=1\n\n`;
-  const separator = cfg.scrapeServiceUrl.includes("?") ? "&" : "?";
 
   for (const ch of channels) {
     const embedUrl = ch.embed_url || ch.manifest_url || ch.iframe_url;
@@ -152,7 +159,7 @@ async function generateSportsbitePlaylist(customConfig = {}) {
     const c = getSportsbiteChannelCountry(ch);
     const groupTitle = `${c.flag} ${c.country}`;
     const logo = getSportsbiteChannelLogo(ch);
-    const scrapeUrl = `${cfg.scrapeServiceUrl}${separator}url=${encodeURIComponent(embedUrl)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(embedUrl)}` : embedUrl;
 
     m3uContent += `#EXTINF:-1 ${tvgIdAttr}tvg-name="${tvgName}" tvg-logo="${logo}" group-title="${groupTitle}",${displayName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

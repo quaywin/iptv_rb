@@ -157,11 +157,11 @@ async function generateCdnPlaylist(customConfig = {}) {
 
   const scrapeBase = cfg.cdnScrapeServiceUrl || cfg.sports247ScrapeServiceUrl || cfg.damScrapeServiceUrl || cfg.scrapeServiceUrl;
   let base = scrapeBase;
-  if (!base.includes("proxy_segments=true")) {
+  if (base && !base.includes("proxy_segments=true")) {
     const join = base.includes("?") ? "&" : "?";
     base = `${base}${join}proxy_segments=true`;
   }
-  const sep = base.includes("?") ? "&" : "?";
+  const sep = base ? (base.includes("?") ? "&" : "?") : "?";
   const maxChannels = typeof cfg.maxChannelsPerEvent === "number" ? cfg.maxChannelsPerEvent : 4;
 
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
@@ -193,7 +193,7 @@ async function generateCdnPlaylist(customConfig = {}) {
       const logo = ch.image || defaultLogo;
 
       const embedUrl = ch.url || `https://cdnlivetv.tv/api/v1/channels/player/?name=${encodeURIComponent(ch.channel_name || "")}&code=${encodeURIComponent(ch.channel_code || "")}&user=cdnlivetv&plan=free`;
-      const streamUrl = `${base}${sep}url=${encodeURIComponent(embedUrl)}`;
+      const streamUrl = base ? `${base}${sep}url=${encodeURIComponent(embedUrl)}` : embedUrl;
 
       m3uContent += `#EXTINF:-1 tvg-id="${ch.id || evt.gameId || ""}" tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
       m3uContent += `${streamUrl}\n\n`;

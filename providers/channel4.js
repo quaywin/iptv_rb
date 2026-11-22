@@ -408,11 +408,11 @@ async function generateChannel4Playlist(customConfig = {}) {
   });
 
   let scrapeBase = cfg.sports247ScrapeServiceUrl || cfg.damScrapeServiceUrl || cfg.scrapeServiceUrl;
-  if (!scrapeBase.includes("proxy_segments=true")) {
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
     const join = scrapeBase.includes("?") ? "&" : "?";
     scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
   }
-  const separator = scrapeBase.includes("?") ? "&" : "?";
+  const separator = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
 
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
 
@@ -423,7 +423,7 @@ async function generateChannel4Playlist(customConfig = {}) {
     const tvgName = (ch.name || "").trim();
     const tvgId = `sports247-${ch.channelId}`;
     const logo = ch.flag || "";
-    const scrapeUrl = `${scrapeBase}${separator}url=${encodeURIComponent(ch.embed)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(ch.embed)}` : ch.embed;
 
     m3uContent += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${logo}" group-title="${groupTitle}",${displayName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

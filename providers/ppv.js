@@ -116,8 +116,14 @@ async function generatePpvPlaylist(customConfig = {}) {
 
   console.log(`Filtered and sorted ${activeStreams.length} active PPV streams.`);
 
+  let scrapeBase = cfg.scrapeServiceUrl;
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
+    const join = scrapeBase.includes("?") ? "&" : "?";
+    scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
+  }
+  const separator = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
+
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
-  const separator = cfg.scrapeServiceUrl.includes("?") ? "&" : "?";
 
   for (const s of activeStreams) {
     const sportIcon = getSportIcon(s.category, "ppv");
@@ -135,7 +141,7 @@ async function generatePpvPlaylist(customConfig = {}) {
     const groupTitle = s.category || "Sports";
     const defaultLogo = s.poster || "";
     const logo = getLeagueLogo(s.tag || s.category, defaultLogo);
-    const scrapeUrl = `${cfg.scrapeServiceUrl}${separator}url=${encodeURIComponent(s.iframe)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(s.iframe)}` : s.iframe;
 
     m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

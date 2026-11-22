@@ -115,8 +115,14 @@ async function generateTimChannelsPlaylist(customConfig = {}) {
     return (a.name || "").localeCompare(b.name || "");
   });
 
+  let scrapeBase = cfg.scrapeServiceUrl;
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
+    const join = scrapeBase.includes("?") ? "&" : "?";
+    scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
+  }
+  const separator = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
+
   let m3uContent = `#EXTM3U ${epgHeader}tvg-shift=0 m3uautoload=1\n\n`;
-  const separator = cfg.scrapeServiceUrl.includes("?") ? "&" : "?";
 
   for (const ch of channels) {
     const streamUrl = ch.streams[0].url;
@@ -127,7 +133,7 @@ async function generateTimChannelsPlaylist(customConfig = {}) {
     const c = getChannelCountry(ch);
     const groupTitle = `${c.flag} ${c.country}`;
     const logo = getTimChannelLogo(ch);
-    const scrapeUrl = `${cfg.scrapeServiceUrl}${separator}url=${encodeURIComponent(streamUrl)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(streamUrl)}` : streamUrl;
 
     m3uContent += `#EXTINF:-1 ${tvgIdAttr}tvg-name="${tvgName}" tvg-logo="${logo}" group-title="${groupTitle}",${displayName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

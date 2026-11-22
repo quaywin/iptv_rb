@@ -145,11 +145,11 @@ async function generateVidcdnPlaylist(customConfig = {}) {
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
 
   let scrapeBase = cfg.cineScrapeServiceUrl || cfg.scrapeServiceUrl;
-  if (!scrapeBase.includes("proxy_segments=true")) {
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
     const join = scrapeBase.includes("?") ? "&" : "?";
     scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
   }
-  const separator = scrapeBase.includes("?") ? "&" : "?";
+  const separator = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
   const embedBase = cfg.cineEmbedChannelBaseUrl || "https://cinevid.pro/embed/channel";
 
   for (const ch of channels) {
@@ -160,7 +160,7 @@ async function generateVidcdnPlaylist(customConfig = {}) {
     const c = getVidcdnChannelCountry(ch);
     const groupTitle = `${c.flag} ${c.country}`;
     const logo = ch.logo ? (ch.logo.startsWith("http") ? ch.logo : `https://vidcdn.vip${ch.logo}`) : "";
-    const scrapeUrl = `${scrapeBase}${separator}url=${encodeURIComponent(embedUrl)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(embedUrl)}` : embedUrl;
 
     m3uContent += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${logo}" group-title="${groupTitle}",${displayName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

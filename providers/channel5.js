@@ -154,11 +154,11 @@ async function generateCdnPlaylist(customConfig = {}) {
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
 
   let scrapeBase = cfg.cdnScrapeServiceUrl || cfg.sports247ScrapeServiceUrl || cfg.damScrapeServiceUrl || cfg.scrapeServiceUrl;
-  if (!scrapeBase.includes("proxy_segments=true")) {
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
     const join = scrapeBase.includes("?") ? "&" : "?";
     scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
   }
-  const separator = scrapeBase.includes("?") ? "&" : "?";
+  const separator = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
 
   for (const ch of channels) {
     const embedUrl = ch.url || `https://cdnlivetv.tv/api/v1/channels/player/?name=${encodeURIComponent(ch.name)}&code=${encodeURIComponent(ch.code || "")}&user=cdnlivetv&plan=free`;
@@ -171,7 +171,7 @@ async function generateCdnPlaylist(customConfig = {}) {
     const c = getCdnChannelCountry(ch);
     const groupTitle = `${c.flag} ${c.country}`;
     const logo = ch.image || (c.code ? `https://purecatamphetamine.github.io/country-flag-icons/3x2/${c.code}.svg` : "");
-    const scrapeUrl = `${scrapeBase}${separator}url=${encodeURIComponent(embedUrl)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(embedUrl)}` : embedUrl;
 
     m3uContent += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${logo}" group-title="${groupTitle}",${displayName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

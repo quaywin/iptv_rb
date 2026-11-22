@@ -165,8 +165,14 @@ async function generateTimLivePlaylist(customConfig = {}) {
     }
   }
 
+  let scrapeBase = cfg.scrapeServiceUrl;
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
+    const join = scrapeBase.includes("?") ? "&" : "?";
+    scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
+  }
+  const separator = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
+
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
-  const separator = cfg.scrapeServiceUrl.includes("?") ? "&" : "?";
 
   for (const s of resolvedEvents) {
     const sportIcon = getSportIcon(s.category, "tim");
@@ -179,7 +185,7 @@ async function generateTimLivePlaylist(customConfig = {}) {
     const groupTitle = s.category || "Sports";
     const defaultLogo = s.logo || "";
     const logo = getLeagueLogo(s.category, defaultLogo);
-    const scrapeUrl = `${cfg.scrapeServiceUrl}${separator}url=${encodeURIComponent(s.streamUrl)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(s.streamUrl)}` : s.streamUrl;
 
     m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

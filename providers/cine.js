@@ -170,11 +170,11 @@ async function generateCinePlaylist(customConfig = {}) {
 
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
   let scrapeBase = cfg.cineScrapeServiceUrl || cfg.scrapeServiceUrl;
-  if (!scrapeBase.includes("proxy_segments=true")) {
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
     const join = scrapeBase.includes("?") ? "&" : "?";
     scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
   }
-  const separator = scrapeBase.includes("?") ? "&" : "?";
+  const separator = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
 
   for (const e of activeEvents) {
     const sportIcon = getSportIcon(e.sport || e.league, "cine");
@@ -190,7 +190,7 @@ async function generateCinePlaylist(customConfig = {}) {
 
     const groupTitle = e.sport ? capitalize(e.sport) : (e.league ? capitalize(e.league) : "Sports");
     const logo = getLeagueLogo(e.league || e.sport, e.logo);
-    const scrapeUrl = `${scrapeBase}${separator}url=${encodeURIComponent(e.playUrl)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(e.playUrl)}` : e.playUrl;
 
     m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

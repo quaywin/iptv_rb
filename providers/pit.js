@@ -110,8 +110,14 @@ async function generatePitPlaylist(customConfig = {}) {
 
   console.log(`Filtered and sorted ${activePrograms.length} active PitSport programs.`);
 
+  let scrapeBase = cfg.scrapeServiceUrl;
+  if (scrapeBase && !scrapeBase.includes("proxy_segments=true")) {
+    const join = scrapeBase.includes("?") ? "&" : "?";
+    scrapeBase = `${scrapeBase}${join}proxy_segments=true`;
+  }
+  const separator = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
+
   let m3uContent = "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
-  const separator = cfg.scrapeServiceUrl.includes("?") ? "&" : "?";
 
   for (const p of activePrograms) {
     const sportIcon = getSportIcon(p.competitionSlug || p.category, "pit");
@@ -128,7 +134,7 @@ async function generatePitPlaylist(customConfig = {}) {
     const groupTitle = p.category || "Sports";
     const defaultLogo = p.logo || "";
     const logo = getLeagueLogo(p.competitionSlug || p.category, defaultLogo);
-    const scrapeUrl = `${cfg.scrapeServiceUrl}${separator}url=${encodeURIComponent(p.playUrl)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(p.playUrl)}` : p.playUrl;
 
     m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;

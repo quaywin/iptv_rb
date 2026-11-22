@@ -149,7 +149,7 @@ async function generateDamPlaylist(customConfig = {}) {
       }
     }
 
-    const scrapeUrl = `${scrapeBase}${separator}url=${encodeURIComponent(embedUrl)}`;
+    const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(embedUrl)}` : embedUrl;
 
     m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;
