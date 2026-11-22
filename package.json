@@ -6,7 +6,8 @@
   "scripts": {
     "start": "bun server.js",
     "generate": "bun generate.js",
-    "test": "bun test.js"
+    "test": "bun test.js",
+    "deploy": "wrangler pages deploy public --project-name=iptv"
   },
   "dependencies": {
     "crypto-js": "^4.2.0",
