@@ -4,7 +4,7 @@ const {
   parseM3uToXtream,
   handleXtreamRequest,
 } = require("./xtream");
-const { buildVodResolverUrl, buildSeriesResolverUrl } = require("./providers/tmdb");
+const { buildVodResolverUrl, buildSeriesResolverUrl, encodeEpisodeId, decodeEpisodeId } = require("./providers/tmdb");
 const config = require("./config");
 
 async function runXtreamTests() {
@@ -534,6 +534,249 @@ https://stream.example.com/skypl/index.m3u8
     getOrGeneratePlaylist: dummyGetOrGenerate,
   });
   console.log("/channel/epg 302 redirect:", channelEpgRes.status === 302 && channelEpgRes.headers.get("location").includes("epg-us") ? "PASSED" : "FAILED");
+
+  // --- Test 6: Optimizations, Protocol Compatibility & Edge Cache ---
+  console.log("\n--- Test 6: Optimizations & Protocol Compatibility ---");
+
+  // 6a. Lazy-load M3U: auth/VOD/Series/EPG must NOT invoke getOrGeneratePlaylist
+  let ppvLoadCount = 0;
+  const countingGetOrGenerate = async () => {
+    ppvLoadCount++;
+    return sampleM3u;
+  };
+  for (const qs of [
+    `username=ppv&password=${currentPass}`,
+    `username=ppv&password=${currentPass}&action=get_vod_categories`,
+    `username=ppv&password=${currentPass}&action=get_vod_info&vod_id=157336`,
+    `username=ppv&password=${currentPass}&action=get_series_categories`,
+    `username=ppv&password=${currentPass}&action=get_short_epg&stream_id=123`,
+  ]) {
+    const r = new Request(`http://localhost:3030/player_api.php?${qs}`);
+    await handleXtreamRequest({ req: r, url: new URL(r.url), config, getOrGeneratePlaylist: countingGetOrGenerate });
+  }
+  if (ppvLoadCount !== 0) {
+    throw new Error(`Lazy-load failed: expected 0 live playlist loads, got ${ppvLoadCount}`);
+  }
+  const liveCatLazyReq = new Request(`http://localhost:3030/player_api.php?username=ppv&password=${currentPass}&action=get_live_categories`);
+  await handleXtreamRequest({ req: liveCatLazyReq, url: new URL(liveCatLazyReq.url), config, getOrGeneratePlaylist: countingGetOrGenerate });
+  const liveStreamLazyReq = new Request(`http://localhost:3030/player_api.php?username=ppv&password=${currentPass}&action=get_live_streams`);
+  await handleXtreamRequest({ req: liveStreamLazyReq, url: new URL(liveStreamLazyReq.url), config, getOrGeneratePlaylist: countingGetOrGenerate });
+  if (ppvLoadCount !== 1) {
+    throw new Error(`Expected exactly 1 live playlist load after get_live_categories + get_live_streams, got ${ppvLoadCount}`);
+  }
+  console.log("Lazy-load Live M3U only on live actions: PASSED");
+
+  // 6b. Bulk VOD & Series deduplication and normalized schema fields
+  const uniqueVodIds = new Set(vodAllStreams.map(v => v.stream_id));
+  if (uniqueVodIds.size !== vodAllStreams.length) {
+    throw new Error(`Duplicate VOD stream_id detected in bulk catalog: ${vodAllStreams.length} vs ${uniqueVodIds.size}`);
+  }
+  if (typeof vodAllStreams[0].rating_5based !== "number") {
+    throw new Error(`Expected numeric rating_5based, got ${typeof vodAllStreams[0].rating_5based}`);
+  }
+  if (!vodAllStreams.every(v => parseInt(v.added, 10) >= 0)) {
+    throw new Error("Negative added timestamp detected in VOD catalog");
+  }
+  if (!Array.isArray(vodAllStreams[0].category_ids) || !vodAllStreams[0].category_ids.every(id => typeof id === "number")) {
+    throw new Error("Expected numeric category_ids array in VOD catalog");
+  }
+  const uniqueSeriesIds = new Set(seriesAllStreams.map(s => s.series_id));
+  if (uniqueSeriesIds.size !== seriesAllStreams.length) {
+    throw new Error(`Duplicate series_id detected in bulk catalog: ${seriesAllStreams.length} vs ${uniqueSeriesIds.size}`);
+  }
+  if (typeof seriesAllStreams[0].rating_5based !== "number") {
+    throw new Error(`Expected numeric series rating_5based, got ${typeof seriesAllStreams[0].rating_5based}`);
+  }
+  console.log("Bulk VOD/Series deduplication & schema normalization: PASSED");
+
+  // 6c. Episode ID encoding/decoding for >= 100 episodes and delimiter syntax
+  const epId100 = encodeEpisodeId(37854, 1, 100);
+  const epId1050 = encodeEpisodeId(37854, 1, 1050);
+  const dec100 = decodeEpisodeId(epId100);
+  const dec1050 = decodeEpisodeId(epId1050);
+  if (dec100?.seriesId !== 37854 || dec100?.season !== 1 || dec100?.episode !== 100) {
+    throw new Error(`encode/decode failed for S01E100: ${JSON.stringify(dec100)}`);
+  }
+  if (dec1050?.seriesId !== 37854 || dec1050?.season !== 1 || dec1050?.episode !== 1050) {
+    throw new Error(`encode/decode failed for S01E1050: ${JSON.stringify(dec1050)}`);
+  }
+  const expectedOnePieceLoc = buildSeriesResolverUrl(37854, 1, 1050, config.seriesResolverUrl);
+  const ep1050Req = new Request(`http://localhost:3030/series/strm/${currentPass}/${epId1050}.mp4`);
+  const ep1050Res = await handleXtreamRequest({ req: ep1050Req, url: new URL(ep1050Req.url), config, getOrGeneratePlaylist: dummyGetOrGenerate });
+  if (ep1050Res.status !== 302 || ep1050Res.headers.get("Location") !== expectedOnePieceLoc) {
+    throw new Error(`Episode >=100 redirect failed: ${ep1050Res.headers.get("Location")}`);
+  }
+  const epDelimReq = new Request(`http://localhost:3030/series/strm/${currentPass}/37854-1-1050.mp4`);
+  const epDelimRes = await handleXtreamRequest({ req: epDelimReq, url: new URL(epDelimReq.url), config, getOrGeneratePlaylist: dummyGetOrGenerate });
+  if (epDelimRes.status !== 302 || epDelimRes.headers.get("Location") !== expectedOnePieceLoc) {
+    throw new Error(`Delimiter episode redirect failed: ${epDelimRes.headers.get("Location")}`);
+  }
+  console.log("Episode ID >=100 & delimiter encoding/decoding: PASSED");
+
+  // 6d. Live TV stable category_id, stable stream_id across LIVE badge, clean schema
+  const sampleM3uNoMotorsport = `#EXTM3U
+#EXTINF:-1 tvg-name="ESPN HD" group-title="United States",🔴 ESPN HD
+https://stream.example.com/espn/index.m3u8
+#EXTINF:-1 tvg-id="sky.pl" group-title="United Kingdom",Sky Sports Premier League
+https://stream.example.com/skypl/index.m3u8
+`;
+  const parsedSubset = parseM3uToXtream(sampleM3uNoMotorsport);
+  const origUsCat = parsed.categories.find(c => c.category_name === "United States")?.category_id;
+  const origUkCat = parsed.categories.find(c => c.category_name === "United Kingdom")?.category_id;
+  const subUsCat = parsedSubset.categories.find(c => c.category_name === "United States")?.category_id;
+  const subUkCat = parsedSubset.categories.find(c => c.category_name === "United Kingdom")?.category_id;
+  if (origUsCat !== subUsCat || origUkCat !== subUkCat) {
+    throw new Error(`Unstable category_id across refresh: US ${origUsCat} vs ${subUsCat}, UK ${origUkCat} vs ${subUkCat}`);
+  }
+  if (parsedSubset.streams[0].stream_id !== firstStreamId) {
+    throw new Error(`Stream ID changed when 🔴 prefix added: ${parsedSubset.streams[0].stream_id} vs ${firstStreamId}`);
+  }
+  if (parsedSubset.streams[0].epg_channel_id !== "" || parsedSubset.streams[0].custom_sid !== "") {
+    throw new Error("Expected empty string for missing epg_channel_id and custom_sid");
+  }
+  if (infoJson.user_info.allowed_output_formats.includes("rtmp")) {
+    throw new Error("allowed_output_formats should not include unsupported rtmp");
+  }
+  console.log("Live TV stable category_id, stream_id & clean schema: PASSED");
+
+  // 6e. Reverse-proxy server_info & timezone time_now
+  const proxyReq = new Request(`http://127.0.0.1:3030/player_api.php?username=strm&password=${currentPass}`, {
+    headers: {
+      "X-Forwarded-Proto": "https",
+      "X-Forwarded-Host": "iptv.example.com",
+    },
+  });
+  const proxyRes = await handleXtreamRequest({ req: proxyReq, url: new URL(proxyReq.url), config, getOrGeneratePlaylist: dummyGetOrGenerate });
+  const proxyJson = await proxyRes.json();
+  if (
+    proxyJson.server_info.server_protocol !== "https" ||
+    proxyJson.server_info.url !== "iptv.example.com" ||
+    proxyJson.server_info.port !== "443" ||
+    !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(proxyJson.server_info.time_now)
+  ) {
+    throw new Error(`Reverse-proxy server_info mismatch: ${JSON.stringify(proxyJson.server_info)}`);
+  }
+  console.log("Reverse-proxy server_info & timezone time_now: PASSED");
+
+  // 6f. POST multipart/form-data
+  const formData = new FormData();
+  formData.append("username", "strm");
+  formData.append("password", currentPass);
+  formData.append("action", "get_vod_categories");
+  const mpReq = new Request("http://localhost:3030/player_api.php", { method: "POST", body: formData });
+  const mpRes = await handleXtreamRequest({ req: mpReq, url: new URL(mpReq.url), config, getOrGeneratePlaylist: dummyGetOrGenerate });
+  const mpJson = await mpRes.json();
+  if (!Array.isArray(mpJson) || mpJson.length === 0) {
+    throw new Error("POST multipart/form-data failed for player_api.php");
+  }
+  console.log("POST multipart/form-data parsing: PASSED");
+
+  // 6g. Root playback shortcut /:username/:password/:streamId
+  const rootPlayTsReq = new Request(`http://localhost:3030/strm/${currentPass}/${firstStreamId}.ts`);
+  const rootPlayTsRes = await handleXtreamRequest({ req: rootPlayTsReq, url: new URL(rootPlayTsReq.url), config, getOrGeneratePlaylist: dummyGetOrGenerate });
+  const rootPlayRawReq = new Request(`http://localhost:3030/strm/${currentPass}/${firstStreamId}`);
+  const rootPlayRawRes = await handleXtreamRequest({ req: rootPlayRawReq, url: new URL(rootPlayRawReq.url), config, getOrGeneratePlaylist: dummyGetOrGenerate });
+  if (
+    rootPlayTsRes.status !== 302 ||
+    rootPlayTsRes.headers.get("Location") !== "https://stream.example.com/espn/index.m3u8" ||
+    rootPlayRawRes.status !== 302 ||
+    rootPlayRawRes.headers.get("Location") !== "https://stream.example.com/espn/index.m3u8"
+  ) {
+    throw new Error("Root /:user/:pass/:streamId playback shortcut failed");
+  }
+  console.log("Root /:user/:pass/:streamId playback shortcut: PASSED");
+
+  // 6h. edgeCache adapter hit on repeated get_vod_categories & get_live_categories (with real request origin)
+  const fakeEdgeStore = new Map();
+  let edgeLiveLoads = 0;
+  const mockEdgeCache = {
+    async match(key) {
+      const hit = fakeEdgeStore.get(key);
+      return hit ? hit.clone() : null;
+    },
+    put(key, res) {
+      fakeEdgeStore.set(key, res.clone());
+    },
+  };
+  const edgeVodReq1 = new Request(`http://localhost:3030/player_api.php?username=gk&password=${currentPass}&action=get_vod_categories`);
+  const edgeVodRes1 = await handleXtreamRequest({
+    req: edgeVodReq1,
+    url: new URL(edgeVodReq1.url),
+    config,
+    getOrGeneratePlaylist: async () => { edgeLiveLoads++; return sampleM3u; },
+    edgeCache: mockEdgeCache,
+  });
+  await edgeVodRes1.json();
+  const storeSizeAfterVod = fakeEdgeStore.size;
+  for (const cacheKey of fakeEdgeStore.keys()) {
+    if (!cacheKey.startsWith("http://localhost:3030/__cache/xtream/v1/")) {
+      throw new Error(`Expected edgeCache key with real origin, got: ${cacheKey}`);
+    }
+  }
+  const edgeVodReq2 = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_vod_categories`);
+  const edgeVodRes2 = await handleXtreamRequest({
+    req: edgeVodReq2,
+    url: new URL(edgeVodReq2.url),
+    config,
+    getOrGeneratePlaylist: async () => { edgeLiveLoads++; return sampleM3u; },
+    edgeCache: mockEdgeCache,
+  });
+  const edgeVodJson2 = await edgeVodRes2.json();
+  if (storeSizeAfterVod !== 1 || !Array.isArray(edgeVodJson2) || edgeVodJson2.length === 0) {
+    throw new Error("edgeCache failed for get_vod_categories");
+  }
+  const edgeLiveReq1 = new Request(`http://localhost:3030/player_api.php?username=gk&password=${currentPass}&action=get_live_categories`);
+  await handleXtreamRequest({
+    req: edgeLiveReq1,
+    url: new URL(edgeLiveReq1.url),
+    config,
+    getOrGeneratePlaylist: async () => { edgeLiveLoads++; return sampleM3u; },
+    edgeCache: mockEdgeCache,
+  });
+  const edgeLiveReq2 = new Request(`http://localhost:3030/player_api.php?username=gk&password=${currentPass}&action=get_live_categories`);
+  await handleXtreamRequest({
+    req: edgeLiveReq2,
+    url: new URL(edgeLiveReq2.url),
+    config,
+    getOrGeneratePlaylist: async () => { edgeLiveLoads++; return sampleM3u; },
+    edgeCache: mockEdgeCache,
+  });
+  if (edgeLiveLoads !== 1 || fakeEdgeStore.size !== 2) {
+    throw new Error(`edgeCache failed for get_live_categories: loads=${edgeLiveLoads}, entries=${fakeEdgeStore.size}`);
+  }
+  console.log("edgeCache adapter hit with real origin for VOD & Live categories: PASSED");
+
+  // 6i. disableBulkVod="auto": OwnTV gets 501, standard players (TiviMate) get 200 deduplicated bulk catalog
+  const autoCfg = { ...config, disableBulkVod: "auto" };
+  const ownTvVodReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_vod_streams`, {
+    headers: { "User-Agent": "OwnTV/2.0" },
+  });
+  const ownTvVodRes = await handleXtreamRequest({ req: ownTvVodReq, url: new URL(ownTvVodReq.url), config: autoCfg, getOrGeneratePlaylist: dummyGetOrGenerate });
+  const ownTvSeriesReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_series`, {
+    headers: { "User-Agent": "OwnTV/2.0" },
+  });
+  const ownTvSeriesRes = await handleXtreamRequest({ req: ownTvSeriesReq, url: new URL(ownTvSeriesReq.url), config: autoCfg, getOrGeneratePlaylist: dummyGetOrGenerate });
+  if (ownTvVodRes.status !== 501 || ownTvSeriesRes.status !== 501) {
+    throw new Error(`Expected 501 for OwnTV in auto mode, got VOD=${ownTvVodRes.status}, Series=${ownTvSeriesRes.status}`);
+  }
+
+  const tiviVodReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_vod_streams`, {
+    headers: { "User-Agent": "TiviMate/5.1.0" },
+  });
+  const tiviVodRes = await handleXtreamRequest({ req: tiviVodReq, url: new URL(tiviVodReq.url), config: autoCfg, getOrGeneratePlaylist: dummyGetOrGenerate });
+  const tiviVodJson = await tiviVodRes.json();
+  const tiviSeriesReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_series`, {
+    headers: { "User-Agent": "TiviMate/5.1.0" },
+  });
+  const tiviSeriesRes = await handleXtreamRequest({ req: tiviSeriesReq, url: new URL(tiviSeriesReq.url), config: autoCfg, getOrGeneratePlaylist: dummyGetOrGenerate });
+  const tiviSeriesJson = await tiviSeriesRes.json();
+  if (
+    tiviVodRes.status !== 200 || !Array.isArray(tiviVodJson) || tiviVodJson.length === 0 ||
+    tiviSeriesRes.status !== 200 || !Array.isArray(tiviSeriesJson) || tiviSeriesJson.length === 0
+  ) {
+    throw new Error(`Expected 200 non-empty bulk catalog for TiviMate in auto mode`);
+  }
+  console.log("disableBulkVod='auto' (501 for OwnTV, 200 bulk for TiviMate): PASSED");
 
   console.log("\n🎉 ALL XTREAM CODES API & VOD/SERIES TESTS PASSED SUCCESSFULLY! 🎉\n");
 }

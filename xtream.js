@@ -18,6 +18,7 @@ const {
 const defaultConfig = require("./config");
 const {
   isAllCategory,
+  decodeEpisodeId,
   getVodCategories,
   getVodStreams,
   getVodInfo,
@@ -90,9 +91,10 @@ const PROVIDER_MAP = {
   all: { filename: "all.m3u", generator: generateCombinedPlaylist, title: "All Combined" },
 };
 
-// In-memory cache for parsed Xtream data per provider
+// In-memory cache & in-flight deduplication for parsed Xtream data per provider
 // providerKey -> { timestamp, m3uContent, categories, streams, streamMap, categoryStreams }
 const xtreamCache = new Map();
+const xtreamInFlight = new Map();
 
 /**
  * 32-bit positive integer hash function (djb2 variant)
@@ -161,6 +163,17 @@ function extractSearchQuery(params) {
 }
 
 /**
+ * Strip transient live-status prefixes (emojis/badges) so stream_id stays stable
+ * when an upcoming match transitions to live.
+ */
+function normalizeStreamKeyName(name) {
+  const cleaned = String(name || "")
+    .replace(/^(?:[\s🔴🟢🟡🔵📺⚽🏈🏀🏒🥊⚾🏎️🎾🏏🎯🚴🤼🏆]+|\[?\s*LIVE\s*\]?\s*[:|-]?)/gi, "")
+    .trim();
+  return cleaned || String(name || "").trim();
+}
+
+/**
  * Parse raw M3U text into structured Xtream categories and streams
  */
 function parseM3uToXtream(m3uContent) {
@@ -199,11 +212,17 @@ function parseM3uToXtream(m3uContent) {
     }
   }
 
-  // Build categories map
+  // Build categories map with deterministic category_id hashes so IDs remain stable across refreshes
   const categoryNames = Array.from(new Set(rawItems.map(it => it.groupTitle))).sort((a, b) => a.localeCompare(b));
   const categoryIdMap = new Map(); // groupTitle -> category_id string
-  const categories = categoryNames.map((name, idx) => {
-    const catId = String(idx + 1);
+  const usedCatIds = new Set();
+  const categories = categoryNames.map((name) => {
+    let catNum = hashStringToInt("cat|" + name);
+    while (usedCatIds.has(catNum)) {
+      catNum++;
+    }
+    usedCatIds.add(catNum);
+    const catId = String(catNum);
     categoryIdMap.set(name, catId);
     return {
       category_id: catId,
@@ -221,7 +240,7 @@ function parseM3uToXtream(m3uContent) {
   const usedIds = new Set();
 
   rawItems.forEach((item, index) => {
-    let streamId = hashStringToInt(`${item.name}|${item.url}`);
+    let streamId = hashStringToInt(`${normalizeStreamKeyName(item.name)}|${item.url}`);
     // Handle rare hash collisions
     while (usedIds.has(streamId)) {
       streamId++;
@@ -236,10 +255,11 @@ function parseM3uToXtream(m3uContent) {
       stream_type: "live",
       stream_id: streamId,
       stream_icon: item.logo,
-      epg_channel_id: item.epgId || null,
+      epg_channel_id: item.epgId || "",
       added: nowTs,
       category_id: catId,
-      custom_sid: null,
+      category_ids: [Number(catId)],
+      custom_sid: "",
       tv_archive: 0,
       direct_source: "",
       tv_archive_duration: 0,
@@ -309,7 +329,7 @@ function authenticateUser(username, password, cfg) {
 }
 
 /**
- * Get or parse Xtream structured data for a provider with caching
+ * Get or parse Xtream structured data for a provider with caching and in-flight deduplication
  */
 async function getOrLoadXtreamData(providerKey, getOrGeneratePlaylist, cfg) {
   const providerDef = PROVIDER_MAP[providerKey];
@@ -323,20 +343,31 @@ async function getOrLoadXtreamData(providerKey, getOrGeneratePlaylist, cfg) {
     return cached;
   }
 
-  const m3uContent = await getOrGeneratePlaylist(providerDef.filename, providerDef.generator, providerKey);
-  if (!m3uContent?.trim()) {
-    return cached || null;
+  if (xtreamInFlight.has(providerKey)) {
+    return xtreamInFlight.get(providerKey);
   }
 
-  const parsed = parseM3uToXtream(m3uContent);
-  const data = {
-    timestamp: now,
-    m3uContent,
-    ...parsed,
-  };
+  const loadPromise = (async () => {
+    const m3uContent = await getOrGeneratePlaylist(providerDef.filename, providerDef.generator, providerKey);
+    if (!m3uContent?.trim()) {
+      return cached || null;
+    }
 
-  xtreamCache.set(providerKey, data);
-  return data;
+    const parsed = parseM3uToXtream(m3uContent);
+    const data = {
+      timestamp: Date.now(),
+      m3uContent,
+      ...parsed,
+    };
+
+    xtreamCache.set(providerKey, data);
+    return data;
+  })().finally(() => {
+    xtreamInFlight.delete(providerKey);
+  });
+
+  xtreamInFlight.set(providerKey, loadPromise);
+  return loadPromise;
 }
 
 /**
@@ -348,10 +379,116 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
 };
 
+const RESERVED_ROOT_SEGMENTS = new Set(["live", "movie", "vod", "series", "api"]);
+
+function resolveServerInfo(req, url, timezone = "Asia/Ho_Chi_Minh") {
+  const xfProto = req.headers.get("x-forwarded-proto")?.split(",")[0].trim();
+  const protocol = (xfProto || (url.protocol ? url.protocol.replace(":", "") : "http")).toLowerCase();
+
+  const xfHost = req.headers.get("x-forwarded-host")?.split(",")[0].trim();
+  const xfPort = req.headers.get("x-forwarded-port")?.split(",")[0].trim();
+  let host = url.hostname || "localhost";
+  let port = url.port || xfPort || "";
+
+  if (xfHost) {
+    try {
+      const parsedHost = new URL(`${protocol}://${xfHost}`);
+      host = parsedHost.hostname || host;
+      port = parsedHost.port || xfPort || (protocol === "https" ? "443" : "80");
+    } catch (_) {
+      host = xfHost.split(":")[0] || host;
+      port = xfPort || (protocol === "https" ? "443" : "80");
+    }
+  }
+
+  if (!port) {
+    port = protocol === "https" ? "443" : "80";
+  }
+
+  let timeNow = new Date().toISOString().replace("T", " ").substring(0, 19);
+  try {
+    timeNow = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(new Date());
+  } catch (_) {}
+
+  return {
+    url: host,
+    port: String(port),
+    https_port: "443",
+    server_protocol: protocol,
+    rtmp_port: "8880",
+    timezone,
+    timestamp_now: Math.floor(Date.now() / 1000),
+    time_now: timeNow,
+    process: true,
+  };
+}
+
+function shouldRejectBulkVod(config, userAgent) {
+  const mode = config?.disableBulkVod;
+  if (mode === true || mode === "true" || mode === "1") return true;
+  if (mode === false || mode === "false" || mode === "0") return false;
+  return /\bowntv\b/i.test(userAgent || "");
+}
+
+function buildCanonicalTmdbCacheKey(origin, action, params) {
+  const entries = [];
+  for (const [k, v] of params.entries()) {
+    const lk = k.toLowerCase();
+    if (lk === "username" || lk === "u" || lk === "password" || lk === "p" || lk === "action") {
+      continue;
+    }
+    entries.push([lk, String(v)]);
+  }
+  entries.sort((a, b) => (a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])));
+  const qs = new URLSearchParams(entries).toString();
+  return `${origin}/__cache/xtream/v1/tmdb/${encodeURIComponent(action)}${qs ? `?${qs}` : ""}`;
+}
+
+async function handleLiveStreamPlayback({ username, password, rawStream, config, getOrGeneratePlaylist, timeStr, userAgent }) {
+  const streamIdMatch = rawStream.match(/^(\d+)/);
+  if (!streamIdMatch) {
+    console.warn(`[XTREAM:UNSUPPORTED ${timeStr}] ⚠️ Invalid live stream format requested: "${rawStream}" (User: "${username}", App: "${userAgent}")`);
+    return new Response("Invalid stream id", { status: 400, headers: CORS_HEADERS });
+  }
+
+  const streamId = parseInt(streamIdMatch[1], 10);
+  const auth = authenticateUser(username, password, config);
+  if (!auth.valid) {
+    return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
+  }
+
+  const providerKey = auth.provider;
+  const xtreamData = await getOrLoadXtreamData(providerKey, getOrGeneratePlaylist, config);
+  const targetUrl = xtreamData?.streamMap?.get(streamId);
+
+  if (!targetUrl) {
+    console.warn(`[XTREAM ${timeStr}] ❌ Live Stream #${streamId} not found in provider "${providerKey}"`);
+    return new Response("Stream not found or expired", { status: 404, headers: CORS_HEADERS });
+  }
+
+  console.log(`[XTREAM ${timeStr}] ▶️ PLAY Live stream #${streamId} (${auth.username}) -> 302 Redirect to ${targetUrl}`);
+  return new Response(null, {
+    status: 302,
+    headers: {
+      ...CORS_HEADERS,
+      Location: targetUrl,
+    },
+  });
+}
+
 /**
  * Main Xtream Codes router and request handler
  */
-async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGeneratePlaylist }) {
+async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGeneratePlaylist, edgeCache = null }) {
   const pathname = url.pathname.toLowerCase();
   const method = req.method ? req.method.toUpperCase() : "GET";
   const userAgent = req.headers.get("user-agent") || "none";
@@ -381,7 +518,15 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
           for (const [k, v] of Object.entries(body)) {
             params.set(k, String(v));
           }
-        } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+        } else if (contentType.includes("multipart/form-data")) {
+          const formData = await req.formData();
+          params = new URLSearchParams(url.searchParams);
+          for (const [k, v] of formData.entries()) {
+            if (typeof v === "string") {
+              params.set(k, v);
+            }
+          }
+        } else if (contentType.includes("application/x-www-form-urlencoded")) {
           const formText = await req.text();
           const formParams = new URLSearchParams(formText);
           params = new URLSearchParams(url.searchParams);
@@ -411,21 +556,16 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       console.warn(`[XTREAM ${timeStr}] ❌ Auth failed for user "${username}": ${auth.error}`);
       return Response.json(
         { user_info: { auth: 0, status: "Disabled", message: auth.error } },
-        { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" } }
+        { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } }
       );
     }
 
     const providerKey = auth.provider;
     console.log(`[XTREAM ${timeStr}] 🔑 Auth OK: user "${username}" (Provider: ${providerKey})`);
-    const xtreamData = await getOrLoadXtreamData(providerKey, getOrGeneratePlaylist, config);
 
-    // Auth & General Server/User Info
+    // Auth & General Server/User Info (does not load live M3U playlist)
     if (!action) {
       console.log(`[XTREAM ${timeStr}] ℹ️ Server/User Info returned for user "${auth.username}" (Provider: ${providerKey})`);
-      const nowSec = Math.floor(Date.now() / 1000);
-      const host = url.hostname || "localhost";
-      const protocol = url.protocol ? url.protocol.replace(":", "") : "http";
-      const port = String(url.port || (protocol === "https" ? 443 : 80));
 
       return Response.json({
         user_info: {
@@ -439,41 +579,65 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
           active_cons: "0",
           created_at: "1600000000",
           max_connections: "5",
-          allowed_output_formats: ["m3u8", "ts", "rtmp", "mp4", "mkv", "avi"],
+          allowed_output_formats: ["m3u8", "ts", "mp4", "mkv", "avi"],
         },
-        server_info: {
-          url: host,
-          port: port,
-          https_port: "443",
-          server_protocol: protocol,
-          rtmp_port: "8880",
-          timezone: config.timezone || "Asia/Ho_Chi_Minh",
-          timestamp_now: nowSec,
-          time_now: new Date().toISOString().replace("T", " ").substring(0, 19),
-          process: true,
-        },
+        server_info: resolveServerInfo(req, url, config.timezone || "Asia/Ho_Chi_Minh"),
       }, {
         status: 200,
         headers: {
           ...CORS_HEADERS,
           "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
         },
       });
     }
 
+    // Helper to read/write edgeCache for read-only Xtream JSON responses
+    const tryEdgeMatch = async (cacheKey) => {
+      if (!edgeCache) return null;
+      try {
+        return await edgeCache.match(cacheKey);
+      } catch (_) {
+        return null;
+      }
+    };
+    const tryEdgePut = (cacheKey, response) => {
+      if (!edgeCache || !cacheKey) return response;
+      try {
+        edgeCache.put(cacheKey, response.clone());
+      } catch (_) {}
+      return response;
+    };
+
+    const liveCacheTtl = config.cacheTtl || 60;
+
     // Action: get_live_categories
     if (action === "get_live_categories") {
+      const cacheKey = `${url.origin}/__cache/xtream/v1/live/${encodeURIComponent(providerKey)}/get_live_categories`;
+      const cachedRes = await tryEdgeMatch(cacheKey);
+      if (cachedRes) return cachedRes;
+
+      const xtreamData = await getOrLoadXtreamData(providerKey, getOrGeneratePlaylist, config);
       const categories = xtreamData?.categories || [];
       console.log(`[XTREAM ${timeStr}] 📺 get_live_categories -> ${categories.length} categories`);
-      return Response.json(categories, {
+      return tryEdgePut(cacheKey, Response.json(categories, {
         status: 200,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
-      });
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": `public, max-age=${liveCacheTtl}, s-maxage=${liveCacheTtl}`,
+        },
+      }));
     }
 
     // Action: get_live_streams
     if (action === "get_live_streams") {
       const catId = getParam(params, "category_id");
+      const cacheKey = `${url.origin}/__cache/xtream/v1/live/${encodeURIComponent(providerKey)}/get_live_streams?cat=${encodeURIComponent(catId || "all")}`;
+      const cachedRes = await tryEdgeMatch(cacheKey);
+      if (cachedRes) return cachedRes;
+
+      const xtreamData = await getOrLoadXtreamData(providerKey, getOrGeneratePlaylist, config);
       let streams = [];
       if (!isAllCategory(catId) && xtreamData?.categoryStreams) {
         streams = xtreamData.categoryStreams.get(catId) || [];
@@ -482,20 +646,32 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       }
 
       console.log(`[XTREAM ${timeStr}] 📺 get_live_streams (category: "${catId || "all"}") -> ${streams.length} streams`);
-      return Response.json(streams, {
+      return tryEdgePut(cacheKey, Response.json(streams, {
         status: 200,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
-      });
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": `public, max-age=${liveCacheTtl}, s-maxage=${liveCacheTtl}`,
+        },
+      }));
     }
 
     // Action: VOD Movie Categories
     if (action === "get_vod_categories") {
+      const cacheKey = buildCanonicalTmdbCacheKey(url.origin, action, params);
+      const cachedRes = await tryEdgeMatch(cacheKey);
+      if (cachedRes) return cachedRes;
+
       const categories = await getVodCategories(config?.tmdbApiKey);
       console.log(`[XTREAM ${timeStr}] 🎬 get_vod_categories -> ${categories.length} categories`);
-      return Response.json(categories, {
+      return tryEdgePut(cacheKey, Response.json(categories, {
         status: 200,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
-      });
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=3600, s-maxage=21600",
+        },
+      }));
     }
 
     // Action: VOD Movie Streams
@@ -506,11 +682,11 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const page = parseInt(pageRaw || "1", 10) || 1;
       const search = extractSearchQuery(params);
 
-      // Block bulk load-all requests if disableBulkVod is enabled.
-      // This returns HTTP 501, which triggers native sliceByCategory fallback in OwnTV and other clients.
-      const disableBulkVod = config?.disableBulkVod !== false;
+      // Block bulk load-all requests when disableBulkVod applies (true, or "auto" for OwnTV).
+      // Returns HTTP 501, triggering native sliceByCategory fallback in OwnTV while allowing standard players.
+      const rejectBulkVod = shouldRejectBulkVod(config, userAgent);
       const isBulkRequest = isAllCategory(catId) && !hasPageParam && !search;
-      if (isBulkRequest && disableBulkVod) {
+      if (isBulkRequest && rejectBulkVod) {
         console.log(`[XTREAM ${timeStr}] 🚫 Bulk get_vod_streams rejected (501) to force per-category sync`);
         return Response.json(
           {
@@ -527,18 +703,25 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
         );
       }
 
+      const cacheKey = buildCanonicalTmdbCacheKey(url.origin, action, params);
+      const cachedRes = await tryEdgeMatch(cacheKey);
+      if (cachedRes) return cachedRes;
+
       const streams = await getVodStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
+      const totalCount = streams._totalCount !== undefined ? streams._totalCount : (hasPageParam ? 1000 : streams.length);
       console.log(`[XTREAM ${timeStr}] 🎬 get_vod_streams (category: "${catId || "all"}", page: ${page}, search: "${search || ""}") -> ${streams.length} movies`);
-      return Response.json(streams, {
+      const res = Response.json(streams, {
         status: 200,
         headers: {
           ...CORS_HEADERS,
           "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=1800, s-maxage=21600",
           "X-Page": String(page),
           "X-Per-Page": hasPageParam ? "20" : String(streams.length),
-          "X-Total-Count": String(hasPageParam ? 1000 : streams.length),
+          "X-Total-Count": String(totalCount),
         },
       });
+      return streams.length > 0 ? tryEdgePut(cacheKey, res) : res;
     }
 
     // Action: VOD Info
@@ -547,22 +730,39 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       if (!vodId) {
         return Response.json({}, { status: 200, headers: CORS_HEADERS });
       }
+      const cacheKey = buildCanonicalTmdbCacheKey(url.origin, action, params);
+      const cachedRes = await tryEdgeMatch(cacheKey);
+      if (cachedRes) return cachedRes;
+
       const info = await getVodInfo(vodId, config?.tmdbApiKey);
       console.log(`[XTREAM ${timeStr}] 🎬 get_vod_info (vodId: ${vodId}) -> "${info?.info?.name || "unknown"}"`);
-      return Response.json(info, {
+      const res = Response.json(info, {
         status: 200,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=1800, s-maxage=21600",
+        },
       });
+      return info?.info ? tryEdgePut(cacheKey, res) : res;
     }
 
     // Action: Series Categories
     if (action === "get_series_categories") {
+      const cacheKey = buildCanonicalTmdbCacheKey(url.origin, action, params);
+      const cachedRes = await tryEdgeMatch(cacheKey);
+      if (cachedRes) return cachedRes;
+
       const categories = await getSeriesCategories(config?.tmdbApiKey);
       console.log(`[XTREAM ${timeStr}] 🍿 get_series_categories -> ${categories.length} categories`);
-      return Response.json(categories, {
+      return tryEdgePut(cacheKey, Response.json(categories, {
         status: 200,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
-      });
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=3600, s-maxage=21600",
+        },
+      }));
     }
 
     // Action: Series Streams (supports get_series and get_series_streams alias)
@@ -573,11 +773,11 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const page = parseInt(pageRaw || "1", 10) || 1;
       const search = extractSearchQuery(params);
 
-      // Block bulk load-all series requests if disableBulkVod is enabled.
-      // This returns HTTP 501, which triggers native sliceByCategory fallback in OwnTV and other clients.
-      const disableBulkVod = config?.disableBulkVod !== false;
+      // Block bulk load-all series requests when disableBulkVod applies (true, or "auto" for OwnTV).
+      // Returns HTTP 501, triggering native sliceByCategory fallback in OwnTV while allowing standard players.
+      const rejectBulkVod = shouldRejectBulkVod(config, userAgent);
       const isBulkRequest = isAllCategory(catId) && !hasPageParam && !search;
-      if (isBulkRequest && disableBulkVod) {
+      if (isBulkRequest && rejectBulkVod) {
         console.log(`[XTREAM ${timeStr}] 🚫 Bulk get_series rejected (501) to force per-category sync`);
         return Response.json(
           {
@@ -594,22 +794,33 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
         );
       }
 
+      const cacheKey = buildCanonicalTmdbCacheKey(url.origin, action, params);
+      const cachedRes = await tryEdgeMatch(cacheKey);
+      if (cachedRes) return cachedRes;
+
       const series = await getSeriesStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
+      const totalCount = series._totalCount !== undefined ? series._totalCount : (hasPageParam ? 1000 : series.length);
       console.log(`[XTREAM ${timeStr}] 🍿 get_series (category: "${catId || "all"}", page: ${page}, search: "${search || ""}") -> ${series.length} series`);
-      return Response.json(series, {
+      const res = Response.json(series, {
         status: 200,
         headers: {
           ...CORS_HEADERS,
           "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=1800, s-maxage=21600",
           "X-Page": String(page),
           "X-Per-Page": hasPageParam ? "20" : String(series.length),
-          "X-Total-Count": String(hasPageParam ? 1000 : series.length),
+          "X-Total-Count": String(totalCount),
         },
       });
+      return series.length > 0 ? tryEdgePut(cacheKey, res) : res;
     }
 
     // Action: Search (search / search_vod / search_series)
     if (action === "search" || action === "search_vod" || action === "search_series") {
+      const cacheKey = buildCanonicalTmdbCacheKey(url.origin, action, params);
+      const cachedRes = await tryEdgeMatch(cacheKey);
+      if (cachedRes) return cachedRes;
+
       const type = (
         getParam(params, "type") ||
         getParam(params, "search_type") ||
@@ -633,19 +844,35 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       if (isSeries) {
         const series = await getSeriesStreams(null, config?.tmdbApiKey, page, query, true);
         console.log(`[XTREAM ${timeStr}] 🔎 ${action} [SERIES] (query: "${query}", page: ${page}) -> ${series.length} series`);
-        return Response.json(series, {
+        const res = Response.json(series, {
           status: 200,
-          headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8", "X-Page": String(page), "X-Per-Page": "20" },
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "public, max-age=1800, s-maxage=21600",
+            "X-Page": String(page),
+            "X-Per-Page": "20",
+            "X-Total-Count": String(series._totalCount !== undefined ? series._totalCount : series.length),
+          },
         });
+        return series.length > 0 ? tryEdgePut(cacheKey, res) : res;
       }
 
       // Default search: VOD (movies) only - strict separation between VOD and Series schemas
       const streams = await getVodStreams(null, config?.tmdbApiKey, page, query, true);
       console.log(`[XTREAM ${timeStr}] 🔎 ${action} [VOD] (query: "${query}", page: ${page}) -> ${streams.length} movies`);
-      return Response.json(streams, {
+      const res = Response.json(streams, {
         status: 200,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8", "X-Page": String(page), "X-Per-Page": "20" },
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=1800, s-maxage=21600",
+          "X-Page": String(page),
+          "X-Per-Page": "20",
+          "X-Total-Count": String(streams._totalCount !== undefined ? streams._totalCount : streams.length),
+        },
       });
+      return streams.length > 0 ? tryEdgePut(cacheKey, res) : res;
     }
 
     // Action: Series Info
@@ -654,12 +881,21 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       if (!seriesId) {
         return Response.json({}, { status: 200, headers: CORS_HEADERS });
       }
+      const cacheKey = buildCanonicalTmdbCacheKey(url.origin, action, params);
+      const cachedRes = await tryEdgeMatch(cacheKey);
+      if (cachedRes) return cachedRes;
+
       const info = await getSeriesInfo(seriesId, config?.tmdbApiKey);
       console.log(`[XTREAM ${timeStr}] 🍿 get_series_info (seriesId: ${seriesId}) -> "${info?.info?.name || "unknown"}" (${info?.seasons?.length || 0} seasons)`);
-      return Response.json(info, {
+      const res = Response.json(info, {
         status: 200,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=1800, s-maxage=21600",
+        },
       });
+      return info?.info ? tryEdgePut(cacheKey, res) : res;
     }
 
     // Action: EPG listings (get_short_epg, get_simple_data_table, get_all_epg)
@@ -689,40 +925,14 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
   if (pathname.startsWith("/live/")) {
     const parts = url.pathname.split("/").filter(Boolean); // ['live', username, password, streamId]
     if (parts.length >= 4) {
-      const username = parts[1];
-      const password = parts[2];
-      const rawStream = parts[3];
-
-      // Extract streamId integer
-      const streamIdMatch = rawStream.match(/^(\d+)/);
-      if (!streamIdMatch) {
-        console.warn(`[XTREAM:UNSUPPORTED ${timeStr}] ⚠️ Invalid live stream format requested: "${rawStream}" (User: "${username}", App: "${userAgent}")`);
-        return new Response("Invalid stream id", { status: 400, headers: CORS_HEADERS });
-      }
-
-      const streamId = parseInt(streamIdMatch[1], 10);
-      const auth = authenticateUser(username, password, config);
-      if (!auth.valid) {
-        return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
-      }
-
-      const providerKey = auth.provider;
-      const xtreamData = await getOrLoadXtreamData(providerKey, getOrGeneratePlaylist, config);
-      const targetUrl = xtreamData?.streamMap?.get(streamId);
-
-      if (!targetUrl) {
-        console.warn(`[XTREAM ${timeStr}] ❌ Live Stream #${streamId} not found in provider "${providerKey}"`);
-        return new Response("Stream not found or expired", { status: 404, headers: CORS_HEADERS });
-      }
-
-      console.log(`[XTREAM ${timeStr}] ▶️ PLAY Live stream #${streamId} (${auth.username}) -> 302 Redirect to ${targetUrl}`);
-      // HTTP 302 Redirect to upstream stream manifest / scraper
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...CORS_HEADERS,
-          Location: targetUrl,
-        },
+      return handleLiveStreamPlayback({
+        username: parts[1],
+        password: parts[2],
+        rawStream: parts[3],
+        config,
+        getOrGeneratePlaylist,
+        timeStr,
+        userAgent,
       });
     }
   }
@@ -772,32 +982,25 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const password = parts[2];
       const rawStream = parts[3];
 
-      const epIdMatch = rawStream.match(/^(\d+)/);
-      if (!epIdMatch) {
+      const decoded = decodeEpisodeId(rawStream);
+      if (!decoded || !decoded.seriesId) {
         console.warn(`[XTREAM:UNSUPPORTED ${timeStr}] ⚠️ Invalid series episode format requested: "${rawStream}" (User: "${username}", App: "${userAgent}")`);
         return new Response("Invalid episode id", { status: 400, headers: CORS_HEADERS });
       }
 
-      const episodeId = parseInt(epIdMatch[1], 10);
       const auth = authenticateUser(username, password, config);
       if (!auth.valid) {
         return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
       }
 
-      // Decode seriesId, season, and episode from encoded integer:
-      // epId = seriesId * 10000 + (season % 100) * 100 + (epNumber % 100)
-      // seriesId keeps its full width (see providers/tmdb.js) so shows with
-      // TMDB ids >= 100000 resolve to the correct series.
-      const epNum = episodeId % 100;
-      const sNum = Math.floor((episodeId % 10000) / 100);
-      const seriesId = Math.floor(episodeId / 10000);
+      const { seriesId, season: sNum, episode: epNum } = decoded;
 
       // Build target series video resolver URL
       const targetUrl = buildSeriesResolverUrl(seriesId, sNum, epNum, config?.seriesResolverUrl);
       if (targetUrl.includes("your-proxy-domain.com")) {
         console.error(`[XTREAM:CONFIG_ERROR ${timeStr}] ❌ SERIES_RESOLVER_URL is not set in Cloudflare Pages environment variables! Falling back to unconfigured placeholder: ${targetUrl}`);
       }
-      console.log(`[XTREAM ${timeStr}] ▶️ PLAY Series episode #${episodeId} (Series: ${seriesId}, S${sNum}E${epNum}) (${auth.username}) -> 302 Redirect to ${targetUrl}`);
+      console.log(`[XTREAM ${timeStr}] ▶️ PLAY Series episode #${rawStream} (Series: ${seriesId}, S${sNum}E${epNum}) (${auth.username}) -> 302 Redirect to ${targetUrl}`);
 
       return new Response(null, {
         status: 302,
@@ -805,6 +1008,26 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
           ...CORS_HEADERS,
           Location: targetUrl,
         },
+      });
+    }
+  }
+
+  // 4b. Handle root Xtream Live shortcut /:username/:password/:streamId (.ts | .m3u8 | raw id)
+  {
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (
+      parts.length === 3 &&
+      !RESERVED_ROOT_SEGMENTS.has(parts[0].toLowerCase()) &&
+      /^\d+(?:\.(?:ts|m3u8))?$/i.test(parts[2])
+    ) {
+      return handleLiveStreamPlayback({
+        username: parts[0],
+        password: parts[1],
+        rawStream: parts[2],
+        config,
+        getOrGeneratePlaylist,
+        timeStr,
+        userAgent,
       });
     }
   }
@@ -877,13 +1100,44 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
         headers: { "User-Agent": config?.userAgent || "Mozilla/5.0" },
       });
       if (upstreamRes.ok) {
+        const upstreamType = (upstreamRes.headers.get("content-type") || "").toLowerCase();
+        const isGzipUpstream = targetEpgUrl.endsWith(".gz") || upstreamType.includes("gzip");
+        const wantsRawGz = pathname.endsWith(".gz");
+        const acceptEncoding = (req.headers.get("accept-encoding") || "").toLowerCase();
+
+        if (isGzipUpstream && !wantsRawGz) {
+          if (acceptEncoding.includes("gzip")) {
+            return new Response(upstreamRes.body, {
+              status: 200,
+              headers: {
+                ...CORS_HEADERS,
+                "Content-Type": "application/xml; charset=utf-8",
+                "Content-Encoding": "gzip",
+                "Vary": "Accept-Encoding",
+                "Cache-Control": "public, max-age=3600, s-maxage=3600",
+              },
+            });
+          }
+          if (typeof DecompressionStream !== "undefined" && upstreamRes.body) {
+            const decompressedStream = upstreamRes.body.pipeThrough(new DecompressionStream("gzip"));
+            return new Response(decompressedStream, {
+              status: 200,
+              headers: {
+                ...CORS_HEADERS,
+                "Content-Type": "application/xml; charset=utf-8",
+                "Cache-Control": "public, max-age=3600, s-maxage=3600",
+              },
+            });
+          }
+        }
+
         return new Response(upstreamRes.body, {
           status: 200,
           headers: {
             ...CORS_HEADERS,
             "Content-Type": upstreamRes.headers.get("content-type") || "application/gzip",
             "Content-Disposition": `attachment; filename="${targetEpgUrl.split("/").pop() || "epg.xml.gz"}"`,
-            "Cache-Control": "public, max-age=3600",
+            "Cache-Control": "public, max-age=3600, s-maxage=3600",
           },
         });
       }

@@ -7,9 +7,34 @@ const DEFAULT_TMDB_API_KEY = "61e2290429798c561450eb56b26de19b";
 const TMDB_HOSTS = ["https://api.tmdb.org/3", "https://api.themoviedb.org/3"];
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
 
-// In-memory cache to prevent hitting TMDB rate limits
+// In-memory LRU cache + in-flight deduplication to prevent hitting TMDB rate limits
 const memoryCache = new Map();
+const inFlightFetches = new Map();
+const MAX_CACHE_ENTRIES = 500;
 const CACHE_TTL_MS = 6 * 3600 * 1000; // 6 hours
+
+function getCachedTmdb(cacheKey) {
+  const cached = memoryCache.get(cacheKey);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp >= CACHE_TTL_MS) {
+    memoryCache.delete(cacheKey);
+    return null;
+  }
+  // Refresh LRU order
+  memoryCache.delete(cacheKey);
+  memoryCache.set(cacheKey, cached);
+  return cached.data;
+}
+
+function setCachedTmdb(cacheKey, data) {
+  if (memoryCache.has(cacheKey)) {
+    memoryCache.delete(cacheKey);
+  } else if (memoryCache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = memoryCache.keys().next().value;
+    if (oldestKey !== undefined) memoryCache.delete(oldestKey);
+  }
+  memoryCache.set(cacheKey, { data, timestamp: Date.now() });
+}
 
 async function fetchTmdb(endpoint, params = {}, apiKey = DEFAULT_TMDB_API_KEY, timeoutMs = 8000) {
   const query = new URLSearchParams({
@@ -19,43 +44,65 @@ async function fetchTmdb(endpoint, params = {}, apiKey = DEFAULT_TMDB_API_KEY, t
   });
 
   const cacheKey = `${endpoint}?${query.toString()}`;
-  const now = Date.now();
-  const cached = memoryCache.get(cacheKey);
-  if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
-    return cached.data;
+  const cachedData = getCachedTmdb(cacheKey);
+  if (cachedData) {
+    return cachedData;
   }
 
-  let lastError = null;
+  if (inFlightFetches.has(cacheKey)) {
+    return inFlightFetches.get(cacheKey);
+  }
 
-  for (const host of TMDB_HOSTS) {
-    const url = `${host}${endpoint}?${query.toString()}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const fetchPromise = (async () => {
+    let lastError = null;
 
-    try {
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          "Accept": "application/json",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-      });
+    for (const host of TMDB_HOSTS) {
+      const url = `${host}${endpoint}?${query.toString()}`;
 
-      if (!res.ok) {
-        throw new Error(`TMDb HTTP error: ${res.status}`);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+          const res = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+              "Accept": "application/json",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            },
+          });
+
+          if (res.status === 429 && attempt === 0) {
+            const retryAfterSec = parseInt(res.headers.get("retry-after") || "1", 10);
+            const waitMs = Math.min(1000, (Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec : 1) * 350);
+            clearTimeout(timer);
+            await new Promise(resolve => setTimeout(resolve, waitMs));
+            continue;
+          }
+
+          if (!res.ok) {
+            throw new Error(`TMDb HTTP error: ${res.status}`);
+          }
+
+          const data = await res.json();
+          setCachedTmdb(cacheKey, data);
+          return data;
+        } catch (err) {
+          lastError = err;
+          break;
+        } finally {
+          clearTimeout(timer);
+        }
       }
-
-      const data = await res.json();
-      memoryCache.set(cacheKey, { data, timestamp: now });
-      return data;
-    } catch (err) {
-      lastError = err;
-    } finally {
-      clearTimeout(timer);
     }
-  }
 
-  throw lastError || new Error("Failed to reach TMDb API hosts");
+    throw lastError || new Error("Failed to reach TMDb API hosts");
+  })().finally(() => {
+    inFlightFetches.delete(cacheKey);
+  });
+
+  inFlightFetches.set(cacheKey, fetchPromise);
+  return fetchPromise;
 }
 
 /**
@@ -137,6 +184,55 @@ function isAllCategory(catId) {
   );
 }
 
+const CURATED_YEARS = new Set(["2023", "2024", "2025", "2026"]);
+
+function encodeEpisodeId(seriesId, seasonNum, episodeNum) {
+  const sid = Number(seriesId);
+  const s = Number(seasonNum);
+  const e = Number(episodeNum);
+  if (Number.isFinite(sid) && s >= 0 && s < 100 && e >= 0 && e < 100) {
+    return String(sid * 10000 + s * 100 + e);
+  }
+  return (
+    "8" +
+    String(Math.max(0, sid)).padStart(7, "0") +
+    String(Math.max(0, s)).padStart(3, "0") +
+    String(Math.max(0, e)).padStart(4, "0")
+  );
+}
+
+function decodeEpisodeId(rawStream) {
+  const str = String(rawStream || "").trim();
+  const delimMatch = str.match(/^(\d+)[_-](\d+)[_-](\d+)/);
+  if (delimMatch) {
+    return {
+      seriesId: parseInt(delimMatch[1], 10),
+      season: parseInt(delimMatch[2], 10),
+      episode: parseInt(delimMatch[3], 10),
+    };
+  }
+
+  const numMatch = str.match(/^(\d+)/);
+  if (!numMatch) return null;
+
+  const digits = numMatch[1];
+  if (digits.length === 15 && digits.startsWith("8")) {
+    return {
+      seriesId: parseInt(digits.slice(1, 8), 10),
+      season: parseInt(digits.slice(8, 11), 10),
+      episode: parseInt(digits.slice(11, 15), 10),
+    };
+  }
+
+  const episodeId = parseInt(digits, 10);
+  if (!Number.isFinite(episodeId)) return null;
+  return {
+    seriesId: Math.floor(episodeId / 10000),
+    season: Math.floor((episodeId % 10000) / 100),
+    episode: episodeId % 100,
+  };
+}
+
 /**
  * Get VOD Movie Streams (sorted from newest to oldest, optionally filtered by category_id or search keyword)
  */
@@ -151,6 +247,7 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
     };
 
     let results = [];
+    let totalCount = null;
 
     if (search && search.trim()) {
       endpoint = "/search/movie";
@@ -159,6 +256,9 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
       const responses = await Promise.all(
         pagesToFetch.map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
       );
+      if (hasPageParam) {
+        totalCount = Math.min(10000, Number(responses[0]?.total_results || 0));
+      }
       const rawList = responses.flatMap(r => r?.results || []);
       const seen = new Set();
       for (const item of rawList) {
@@ -182,6 +282,7 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
           for (const item of raw) {
             if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
           }
+          totalCount = unique.length;
           results = unique.slice((page - 1) * 20, page * 20);
         } else if (catDef?.query?.special === "lotr") {
           const [lotrCol, hobCol, lotrSearch] = await Promise.all([
@@ -195,6 +296,7 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
           for (const item of raw) {
             if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
           }
+          totalCount = unique.length;
           results = unique.slice((page - 1) * 20, page * 20);
         } else if (catDef?.query?.special === "fast_and_furious") {
           const [ffCol, ffSearch] = await Promise.all([
@@ -207,6 +309,7 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
           for (const item of raw) {
             if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
           }
+          totalCount = unique.length;
           results = unique.slice((page - 1) * 20, page * 20);
         } else if (catDef?.query?.special === "monsterverse") {
           const [gz, kong] = await Promise.all([
@@ -219,26 +322,33 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
           for (const item of raw) {
             if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
           }
+          totalCount = unique.length;
           results = unique.slice((page - 1) * 20, page * 20);
         } else if (catDef?.query?.special === "james_bond") {
           const bondCol = await fetchTmdb("/collection/645", {}, apiKey);
           const raw = bondCol?.parts || [];
+          totalCount = raw.length;
           results = raw.slice((page - 1) * 20, page * 20);
         } else {
           if (catDef) {
-            if (catDef.query?.endpoint) {
-              endpoint = catDef.query.endpoint;
+            const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
+            if (catEndpoint) {
+              endpoint = catEndpoint;
+              baseParams = { ...cleanQuery };
+            } else {
+              Object.assign(baseParams, cleanQuery);
             }
-            Object.assign(baseParams, catDef.query);
           } else {
             baseParams.with_genres = String(categoryId);
           }
           const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
           results = json?.results || [];
+          totalCount = Math.min(10000, Number(json?.total_results || results.length));
         }
       } else {
         const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
         results = json?.results || [];
+        totalCount = Math.min(10000, Number(json?.total_results || results.length));
       }
     } else if (!isAllCategory(categoryId)) {
       const yearStr = String(categoryId);
@@ -360,10 +470,13 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         // Specific platform or genre category: fetch 10 pages (~200 movies)
         const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
         if (catDef) {
-          if (catDef.query?.endpoint) {
-            endpoint = catDef.query.endpoint;
+          const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
+          if (catEndpoint) {
+            endpoint = catEndpoint;
+            baseParams = { ...cleanQuery };
+          } else {
+            Object.assign(baseParams, cleanQuery);
           }
-          Object.assign(baseParams, catDef.query);
         } else {
           baseParams.with_genres = String(categoryId);
         }
@@ -386,8 +499,9 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         let catEndpoint = "/discover/movie";
         let params = { sort_by: "popularity.desc" };
         if (cat.query?.endpoint) {
-          catEndpoint = cat.query.endpoint;
-          params = {};
+          const { endpoint: ep, special: _sp, ...cleanQuery } = cat.query;
+          catEndpoint = ep;
+          params = { ...cleanQuery };
         } else if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
           params.primary_release_year = cat.category_id;
         } else if (cat.query?.special === "harry_potter") {
@@ -427,7 +541,8 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
             items: bondCol?.parts || [],
           };
         } else if (cat.query) {
-          Object.assign(params, cat.query);
+          const { endpoint: _ep, special: _sp, ...cleanQuery } = cat.query;
+          Object.assign(params, cleanQuery);
         }
 
         const json = await fetchTmdb(catEndpoint, { ...params, page: "1" }, apiKey);
@@ -438,29 +553,31 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
       });
 
       const batches = await Promise.all(categoryFetches);
-      const seenInCat = new Set();
-      results = [];
+      const itemMap = new Map();
 
-      // Every category is guaranteed its top 20 items with category_id explicitly set
+      // Deduplicate across categories by TMDB id and aggregate all matching category_ids
       for (const batch of batches) {
         for (const item of (batch.items || []).slice(0, 20)) {
           if (!item?.id) continue;
-          const key = `${batch.catId}:${item.id}`;
-          if (!seenInCat.has(key)) {
-            seenInCat.add(key);
-            results.push({
+          const existing = itemMap.get(item.id);
+          if (existing) {
+            existing._categoryIdsSet.add(batch.catId);
+          } else {
+            itemMap.set(item.id, {
               ...item,
               _assignedCatId: batch.catId,
+              _categoryIdsSet: new Set([batch.catId]),
             });
           }
         }
       }
 
+      results = Array.from(itemMap.values());
       results.sort((a, b) => new Date(b.release_date || 0) - new Date(a.release_date || 0));
     }
 
     const baseNum = hasPageParam ? (page - 1) * 20 : 0;
-    return results.map((m, idx) => {
+    const mapped = results.map((m, idx) => {
       const year = m.release_date ? m.release_date.substring(0, 4) : "";
       let primaryCatId = m._assignedCatId || "2026";
       if (!isAllCategory(categoryId)) {
@@ -471,6 +588,15 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         else if (year === "2023") primaryCatId = "2023";
         else if (parseInt(year, 10) < 2023) primaryCatId = "1006";
       }
+      const parsedMs = m.release_date ? Date.parse(m.release_date) : NaN;
+      const addedTs = Number.isFinite(parsedMs) ? Math.max(0, Math.floor(parsedMs / 1000)) : 0;
+      const rawCatIds = m._categoryIdsSet
+        ? Array.from(m._categoryIdsSet)
+        : [primaryCatId, CURATED_YEARS.has(year) ? year : null].filter(Boolean);
+      const categoryIds = Array.from(
+        new Set(rawCatIds.map(id => Number(id)).filter(n => Number.isFinite(n) && n > 0))
+      );
+
       return {
         num: baseNum + idx + 1,
         name: year ? `${m.title} (${year})` : m.title,
@@ -480,15 +606,20 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
         stream_id: m.id, // 32-bit tmdbId
         stream_icon: m.poster_path ? `${TMDB_IMAGE_BASE}/w500${m.poster_path}` : "",
         rating: String(m.vote_average || 0),
-        rating_5based: ((m.vote_average || 0) / 2).toFixed(1),
-        added: m.release_date ? String(Math.floor(new Date(m.release_date).getTime() / 1000)) : "0",
+        rating_5based: Number(((m.vote_average || 0) / 2).toFixed(1)),
+        added: String(addedTs),
         category_id: primaryCatId,
-        category_ids: m._categoryIdsSet ? Array.from(m._categoryIdsSet) : [primaryCatId, year].filter(Boolean),
+        category_ids: categoryIds,
         container_extension: "mp4",
         custom_sid: "",
         direct_source: "",
       };
     });
+    Object.defineProperty(mapped, "_totalCount", {
+      value: hasPageParam ? (totalCount !== null ? totalCount : mapped.length) : mapped.length,
+      enumerable: false,
+    });
+    return mapped;
   } catch (err) {
     console.error("Error fetching VOD streams:", err.message);
     return [];
@@ -534,7 +665,7 @@ async function getVodInfo(tmdbId, apiKey) {
         country: (m.production_countries || []).map(c => c.name).join(", "),
         genre,
         rating: String(m.vote_average || 0),
-        rating_5based: ((m.vote_average || 0) / 2).toFixed(1),
+        rating_5based: Number(((m.vote_average || 0) / 2).toFixed(1)),
         rating_count_kinopoisk: m.vote_count || 0,
         subtitles: [],
       },
@@ -544,7 +675,7 @@ async function getVodInfo(tmdbId, apiKey) {
         title: m.title,
         year,
         added: String(Math.floor(Date.now() / 1000)),
-        category_id: (m.genres && m.genres[0]) ? String(m.genres[0].id) : "0",
+        category_id: CURATED_YEARS.has(year) ? year : "1006",
         container_extension: "mp4",
         custom_sid: "",
         direct_source: "",
@@ -628,6 +759,7 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
     };
 
     let results = [];
+    let totalCount = null;
 
     if (search && search.trim()) {
       endpoint = "/search/tv";
@@ -636,6 +768,9 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
       const responses = await Promise.all(
         pagesToFetch.map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
       );
+      if (hasPageParam) {
+        totalCount = Math.min(10000, Number(responses[0]?.total_results || 0));
+      }
       const rawList = responses.flatMap(r => r?.results || []);
       const seen = new Set();
       for (const item of rawList) {
@@ -660,22 +795,28 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
           for (const item of raw) {
             if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
           }
+          totalCount = unique.length;
           results = unique.slice((page - 1) * 20, page * 20);
         } else {
           if (catDef) {
-            if (catDef.query?.endpoint) {
-              endpoint = catDef.query.endpoint;
+            const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
+            if (catEndpoint) {
+              endpoint = catEndpoint;
+              baseParams = { ...cleanQuery };
+            } else {
+              Object.assign(baseParams, cleanQuery);
             }
-            Object.assign(baseParams, catDef.query);
           } else {
             baseParams.with_genres = String(categoryId);
           }
           const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
           results = json?.results || [];
+          totalCount = Math.min(10000, Number(json?.total_results || results.length));
         }
       } else {
         const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
         results = json?.results || [];
+        totalCount = Math.min(10000, Number(json?.total_results || results.length));
       }
     } else if (!isAllCategory(categoryId)) {
       const yearStr = String(categoryId);
@@ -719,10 +860,13 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         // Specific platform or genre category: fetch 10 pages (~200 series)
         const catDef = SERIES_CATEGORIES.find(c => c.category_id === String(categoryId));
         if (catDef) {
-          if (catDef.query?.endpoint) {
-            endpoint = catDef.query.endpoint;
+          const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
+          if (catEndpoint) {
+            endpoint = catEndpoint;
+            baseParams = { ...cleanQuery };
+          } else {
+            Object.assign(baseParams, cleanQuery);
           }
-          Object.assign(baseParams, catDef.query);
         } else {
           baseParams.with_genres = String(categoryId);
         }
@@ -753,8 +897,9 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         let catEndpoint = "/discover/tv";
         let params = { sort_by: "popularity.desc" };
         if (cat.query?.endpoint) {
-          catEndpoint = cat.query.endpoint;
-          params = {};
+          const { endpoint: ep, special: _sp, ...cleanQuery } = cat.query;
+          catEndpoint = ep;
+          params = { ...cleanQuery };
         } else if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
           params.first_air_date_year = cat.category_id;
         } else if (cat.query?.special === "got_lotr") {
@@ -767,7 +912,8 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
             items: [...(got?.results || []), ...(hotd?.results || [])],
           };
         } else if (cat.query) {
-          Object.assign(params, cat.query);
+          const { endpoint: _ep, special: _sp, ...cleanQuery } = cat.query;
+          Object.assign(params, cleanQuery);
         }
 
         const json = await fetchTmdb(catEndpoint, { ...params, page: "1" }, apiKey);
@@ -778,40 +924,48 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
       });
 
       const batches = await Promise.all(categoryFetches);
-      const seenInCat = new Set();
-      results = [];
+      const itemMap = new Map();
 
-      // Every series category is guaranteed its top 20 series with category_id explicitly set
+      // Deduplicate across categories by TMDB id and aggregate all matching category_ids
       for (const batch of batches) {
         for (const item of (batch.items || []).slice(0, 20)) {
           if (!item?.id) continue;
-          const key = `${batch.catId}:${item.id}`;
-          if (!seenInCat.has(key)) {
-            seenInCat.add(key);
-            results.push({
+          const existing = itemMap.get(item.id);
+          if (existing) {
+            existing._categoryIdsSet.add(batch.catId);
+          } else {
+            itemMap.set(item.id, {
               ...item,
               _assignedCatId: batch.catId,
+              _categoryIdsSet: new Set([batch.catId]),
             });
           }
         }
       }
 
       // Ensure notable series like Poker Face (120998) is included in Peacock (1001)
-      if (!results.some(r => r.id === 120998)) {
+      const existingPf = itemMap.get(120998);
+      if (existingPf) {
+        existingPf._categoryIdsSet.add("1001");
+      } else {
         try {
           const pf = await fetchTmdb("/tv/120998", {}, apiKey);
           if (pf?.id) {
-            pf._assignedCatId = "1001";
-            results.push(pf);
+            itemMap.set(pf.id, {
+              ...pf,
+              _assignedCatId: "1001",
+              _categoryIdsSet: new Set(["1001"]),
+            });
           }
         } catch (_) {}
       }
 
+      results = Array.from(itemMap.values());
       results.sort((a, b) => new Date(b.first_air_date || 0) - new Date(a.first_air_date || 0));
     }
 
     const baseNum = hasPageParam ? (page - 1) * 20 : 0;
-    return results.map((s, idx) => {
+    const mapped = results.map((s, idx) => {
       const year = s.first_air_date ? s.first_air_date.substring(0, 4) : "";
       let primaryCatId = s._assignedCatId || "2026";
       if (!isAllCategory(categoryId)) {
@@ -822,9 +976,16 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         else if (year === "2023") primaryCatId = "2023";
         else if (parseInt(year, 10) < 2023) primaryCatId = "1006";
       }
+      const parsedMs = s.first_air_date ? Date.parse(s.first_air_date) : NaN;
       const airDateTs = s.first_air_date
-        ? String(Math.floor(new Date(s.first_air_date).getTime() / 1000))
+        ? String(Number.isFinite(parsedMs) ? Math.max(0, Math.floor(parsedMs / 1000)) : 0)
         : String(Math.floor(Date.now() / 1000));
+      const rawCatIds = s._categoryIdsSet
+        ? Array.from(s._categoryIdsSet)
+        : [primaryCatId, CURATED_YEARS.has(year) ? year : null].filter(Boolean);
+      const categoryIds = Array.from(
+        new Set(rawCatIds.map(id => Number(id)).filter(n => Number.isFinite(n) && n > 0))
+      );
       const iconUrl = s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : "";
       return {
         num: baseNum + idx + 1,
@@ -837,7 +998,7 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         cover: iconUrl,
         stream_icon: iconUrl,
         category_id: primaryCatId,
-        category_ids: s._categoryIdsSet ? Array.from(s._categoryIdsSet) : [primaryCatId, year].filter(Boolean),
+        category_ids: categoryIds,
         plot: s.overview || "",
         cast: "",
         director: "",
@@ -846,12 +1007,17 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
         last_modified: airDateTs,
         added: airDateTs,
         rating: String(s.vote_average || 0),
-        rating_5based: ((s.vote_average || 0) / 2).toFixed(1),
+        rating_5based: Number(((s.vote_average || 0) / 2).toFixed(1)),
         backdrop_path: s.backdrop_path ? [`${TMDB_IMAGE_BASE}/w1280${s.backdrop_path}`] : [],
         youtube_trailer: "",
         episode_run_time: "45",
       };
     });
+    Object.defineProperty(mapped, "_totalCount", {
+      value: hasPageParam ? (totalCount !== null ? totalCount : mapped.length) : mapped.length,
+      enumerable: false,
+    });
+    return mapped;
   } catch (err) {
     console.error("Error fetching series streams:", err.message);
     return [];
@@ -875,8 +1041,8 @@ async function getSeriesInfo(seriesId, apiKey) {
     const seasons = [];
     const episodes = {};
 
-    // Filter valid regular seasons (season_number >= 1)
-    const validSeasons = (s.seasons || []).filter(sn => sn.season_number > 0);
+    // Filter valid regular seasons (season_number >= 1), capped at 40 to stay under CF subrequest limits
+    const validSeasons = (s.seasons || []).filter(sn => sn.season_number > 0).slice(0, 40);
 
     for (const seasonMeta of validSeasons) {
       const sNum = seasonMeta.season_number;
@@ -890,51 +1056,52 @@ async function getSeriesInfo(seriesId, apiKey) {
         cover: seasonMeta.poster_path ? `${TMDB_IMAGE_BASE}/w500${seasonMeta.poster_path}` : "",
         cover_big: seasonMeta.poster_path ? `${TMDB_IMAGE_BASE}/w780${seasonMeta.poster_path}` : "",
       });
+    }
 
-      // Fetch season episodes
-      try {
-        const seasonDetail = await fetchTmdb(`/tv/${seriesId}/season/${sNum}`, {}, apiKey);
-        const epList = seasonDetail.episodes || [];
+    // Fetch season episodes in parallel batches of 6
+    const SEASON_BATCH_SIZE = 6;
+    for (let i = 0; i < validSeasons.length; i += SEASON_BATCH_SIZE) {
+      const batch = validSeasons.slice(i, i + SEASON_BATCH_SIZE);
+      await Promise.all(batch.map(async (seasonMeta) => {
+        const sNum = seasonMeta.season_number;
+        try {
+          const seasonDetail = await fetchTmdb(`/tv/${seriesId}/season/${sNum}`, {}, apiKey);
+          const epList = seasonDetail.episodes || [];
 
-        episodes[String(sNum)] = epList.map(ep => {
-          // Encoded episodeId: seriesId * 10000 + season * 100 + epNumber
-          // e.g. series 1399, S01E02 -> 13990102; series 119451, S01E01 -> 1194510101
-          // Keep the full seriesId (no % truncation): truncating made any seriesId >= 100000
-          // resolve to a different show. Note: exceeds 32-bit int for seriesId > 214748
-          // (newest shows); safe in JS/URLs and most clients treat ids as strings/longs.
-          const epId = seriesId * 10000 + (sNum % 100) * 100 + (ep.episode_number % 100);
+          episodes[String(sNum)] = epList.map(ep => {
+            const epId = encodeEpisodeId(Number(seriesId), sNum, ep.episode_number);
+            const epTitle = ep.name || `Episode ${ep.episode_number}`;
 
-          const epTitle = ep.name || `Episode ${ep.episode_number}`;
-
-          return {
-            id: String(epId),
-            episode_num: ep.episode_number,
-            title: epTitle,
-            container_extension: "mp4",
-            info: {
-              name: epTitle,
-              overview: ep.overview || "",
-              duration_secs: (ep.runtime || 45) * 60,
-              duration: `${ep.runtime || 45} min`,
-              video: {},
-              audio: {},
-              bitrate: 0,
-              rating: ep.vote_average || 0,
+            return {
+              id: epId,
+              episode_num: ep.episode_number,
+              title: epTitle,
+              container_extension: "mp4",
+              info: {
+                name: epTitle,
+                overview: ep.overview || "",
+                duration_secs: (ep.runtime || 45) * 60,
+                duration: `${ep.runtime || 45} min`,
+                video: {},
+                audio: {},
+                bitrate: 0,
+                rating: ep.vote_average || 0,
+                season: sNum,
+                tmdb_id: ep.id,
+                series_id: seriesId,
+                subtitles: [],
+              },
+              custom_sid: "",
+              added: String(Math.floor(Date.now() / 1000)),
               season: sNum,
-              tmdb_id: ep.id,
-              series_id: seriesId,
-              subtitles: [],
-            },
-            custom_sid: "",
-            added: String(Math.floor(Date.now() / 1000)),
-            season: sNum,
-            direct_source: "",
-          };
-        });
-      } catch (epErr) {
-        console.warn(`Could not load episodes for series ${seriesId} S${sNum}:`, epErr.message);
-        episodes[String(sNum)] = [];
-      }
+              direct_source: "",
+            };
+          });
+        } catch (epErr) {
+          console.warn(`Could not load episodes for series ${seriesId} S${sNum}:`, epErr.message);
+          episodes[String(sNum)] = [];
+        }
+      }));
     }
 
     return {
@@ -949,11 +1116,11 @@ async function getSeriesInfo(seriesId, apiKey) {
         releaseDate: s.first_air_date || "",
         last_modified: String(Math.floor(Date.now() / 1000)),
         rating: String(s.vote_average || 0),
-        rating_5based: ((s.vote_average || 0) / 2).toFixed(1),
+        rating_5based: Number(((s.vote_average || 0) / 2).toFixed(1)),
         backdrop_path: s.backdrop_path ? [`${TMDB_IMAGE_BASE}/w1280${s.backdrop_path}`] : [],
         youtube_trailer: "",
         episode_run_time: "45",
-        category_id: (s.genres && s.genres[0]) ? String(s.genres[0].id) : "0",
+        category_id: CURATED_YEARS.has(year) ? year : "1006",
       },
       episodes,
     };
@@ -1006,6 +1173,8 @@ function buildSeriesResolverUrl(tmdbId, season, episode, template = "") {
 module.exports = {
   DEFAULT_TMDB_API_KEY,
   isAllCategory,
+  encodeEpisodeId,
+  decodeEpisodeId,
   VOD_CATEGORIES,
   SERIES_CATEGORIES,
   getVodCategories,

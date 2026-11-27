@@ -1,6 +1,14 @@
 const { getRouteHandler } = require("../routes.js");
 const { handleXtreamRequest } = require("../xtream.js");
 
+function parseDisableBulkVod(value) {
+  if (value === undefined || value === null || value === "") return "auto";
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  return "auto";
+}
+
 function buildRuntimeConfig(env) {
   return {
     scrapeServiceUrl: env.SCRAPE_SERVICE_URL,
@@ -39,8 +47,93 @@ function buildRuntimeConfig(env) {
     hoursAhead: env.HOURS_AHEAD ? parseInt(env.HOURS_AHEAD, 10) : undefined,
     cdnHoursAhead: env.CDN_HOURS_AHEAD ? parseInt(env.CDN_HOURS_AHEAD, 10) : 72,
     cdnIncludeOffline: env.CDN_INCLUDE_OFFLINE !== undefined ? (env.CDN_INCLUDE_OFFLINE === "true" || env.CDN_INCLUDE_OFFLINE === "1") : true,
-    disableBulkVod: env.DISABLE_BULK_VOD !== undefined ? (env.DISABLE_BULK_VOD === "true" || env.DISABLE_BULK_VOD === "1") : true,
+    disableBulkVod: parseDisableBulkVod(env.DISABLE_BULK_VOD),
     maxChannelsPerEvent: env.MAX_CHANNELS_PER_EVENT !== undefined ? parseInt(env.MAX_CHANNELS_PER_EVENT, 10) : undefined,
+  };
+}
+
+async function getEdgeCachedPlaylist(filename, generator, runtimeConfig, urlOrigin, waitUntil) {
+  const cache = (typeof caches !== "undefined" && caches.default) ? caches.default : null;
+  const cacheTtl = runtimeConfig.cacheTtl || 60;
+  const cacheKey = cache ? new Request(`${urlOrigin}/__cache/m3u/${filename}`, { method: "GET" }) : null;
+  const staleKey = cache ? new Request(`${urlOrigin}/__cache/m3u/${filename}?__stale=true`, { method: "GET" }) : null;
+
+  if (cache && cacheKey) {
+    try {
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        const text = await cached.text();
+        if (text?.trim()) return text;
+      }
+    } catch (_) {}
+  }
+
+  try {
+    const content = await generator({
+      ...runtimeConfig,
+      getCachedPlaylist: (subFilename, subGen) =>
+        getEdgeCachedPlaylist(subFilename, subGen, runtimeConfig, urlOrigin, waitUntil),
+    });
+
+    if (content?.trim() && cache && cacheKey && staleKey) {
+      const freshRes = new Response(content, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": `public, max-age=${cacheTtl}, s-maxage=${cacheTtl}`,
+        },
+      });
+      const staleRes = new Response(content, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "public, max-age=86400, s-maxage=86400",
+        },
+      });
+      if (waitUntil) {
+        waitUntil(cache.put(cacheKey, freshRes));
+        waitUntil(cache.put(staleKey, staleRes));
+      } else {
+        await cache.put(cacheKey, freshRes);
+        await cache.put(staleKey, staleRes);
+      }
+    }
+
+    if (content?.trim()) {
+      return content;
+    }
+  } catch (err) {
+    console.warn(`Edge playlist generation failed for ${filename}:`, err.message);
+  }
+
+  // Fallback to 24h stale cache if upstream failed or returned empty
+  if (cache && staleKey) {
+    try {
+      const stale = await cache.match(staleKey);
+      if (stale) {
+        const text = await stale.text();
+        if (text?.trim()) return text;
+      }
+    } catch (_) {}
+  }
+
+  return "";
+}
+
+function createEdgeCacheAdapter(waitUntil) {
+  const cache = (typeof caches !== "undefined" && caches.default) ? caches.default : null;
+  if (!cache) return null;
+
+  return {
+    async match(key) {
+      return cache.match(new Request(key, { method: "GET" }));
+    },
+    put(key, response) {
+      const req = new Request(key, { method: "GET" });
+      if (waitUntil) {
+        waitUntil(cache.put(req, response));
+      } else {
+        cache.put(req, response).catch(() => {});
+      }
+    },
   };
 }
 
@@ -52,6 +145,7 @@ export async function onRequest(context) {
   const timeStr = new Date().toISOString().substring(11, 19);
   console.log(`[HTTP ${timeStr}] ${request.method} ${url.pathname}${url.search} | UA: "${ua}"${clientIp ? " | IP: " + clientIp : ""}`);
   const runtimeConfig = buildRuntimeConfig(env);
+  const edgeCache = createEdgeCacheAdapter(waitUntil);
 
   // 1. Handle Xtream Codes API and streams
   try {
@@ -59,9 +153,9 @@ export async function onRequest(context) {
       req: request,
       url,
       config: runtimeConfig,
-      getOrGeneratePlaylist: async (filename, generator) => {
-        return await generator(runtimeConfig);
-      },
+      getOrGeneratePlaylist: async (filename, generator) =>
+        getEdgeCachedPlaylist(filename, generator, runtimeConfig, url.origin, waitUntil),
+      edgeCache,
     });
 
     if (xtreamRes) {
@@ -69,6 +163,7 @@ export async function onRequest(context) {
     }
   } catch (xtreamErr) {
     console.error("Xtream API error on edge:", xtreamErr.message);
+    return new Response("Xtream Internal Error", { status: 500 });
   }
 
   // 2. Handle standard M3U playlist routes

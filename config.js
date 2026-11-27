@@ -3,6 +3,14 @@ function getInt(value, defaultValue) {
   return isNaN(parsed) ? defaultValue : parsed;
 }
 
+function parseDisableBulkVod(value) {
+  if (value === undefined || value === null || value === "") return "auto";
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  return "auto";
+}
+
 const env = (typeof process !== "undefined" && process && process.env) ? process.env : {};
 
 const config = {
@@ -44,7 +52,7 @@ const config = {
   hoursAhead: getInt(env.HOURS_AHEAD, 24),
   cdnHoursAhead: getInt(env.CDN_HOURS_AHEAD, 72),
   cdnIncludeOffline: env.CDN_INCLUDE_OFFLINE !== undefined ? (env.CDN_INCLUDE_OFFLINE === "true" || env.CDN_INCLUDE_OFFLINE === "1") : true,
-  disableBulkVod: env.DISABLE_BULK_VOD !== undefined ? (env.DISABLE_BULK_VOD === "true" || env.DISABLE_BULK_VOD === "1") : true,
+  disableBulkVod: parseDisableBulkVod(env.DISABLE_BULK_VOD),
   maxChannelsPerEvent: env.MAX_CHANNELS_PER_EVENT !== undefined ? parseInt(env.MAX_CHANNELS_PER_EVENT, 10) : 4,
   timezone: env.TIMEZONE || "Asia/Ho_Chi_Minh",
   xtreamPassword: env.XTREAM_PASSWORD !== undefined ? env.XTREAM_PASSWORD : "iptv",
