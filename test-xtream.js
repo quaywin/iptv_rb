@@ -949,6 +949,30 @@ https://stream.example.com/epl.m3u8
   }
   console.log("Live Sports LIVE NOW, sports provider, grouping & channel ranking: PASSED");
 
+  // 8d. Dual resolver template (primary + &fallback=) placeholder substitution
+  const dualVodUrl = buildVodResolverUrl(157336);
+  const dualSeriesUrl = buildSeriesResolverUrl(1399, 1, 2);
+  if (
+    !dualVodUrl.includes("player.cinezo.live%2Fembed%2Fmovie%2F157336") ||
+    !dualVodUrl.includes("fallback=https%3A%2F%2Fvidnest.pro%2Fmovie%2F157336") ||
+    /\{(?:tmdbId|season|episode)\}/.test(dualVodUrl)
+  ) {
+    throw new Error(`Dual VOD resolver URL substitution failed: ${dualVodUrl}`);
+  }
+  if (
+    !dualSeriesUrl.includes("player.cinezo.live%2Fembed%2Ftv%2F1399%2F1%2F2") ||
+    !dualSeriesUrl.includes("fallback=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Ftv%2F1399%2F1%2F2") ||
+    /\{(?:tmdbId|season|episode)\}/.test(dualSeriesUrl)
+  ) {
+    throw new Error(`Dual Series resolver URL substitution failed: ${dualSeriesUrl}`);
+  }
+  const envVodUrl = buildVodResolverUrl(157336, config.vodResolverUrl);
+  const envSeriesUrl = buildSeriesResolverUrl(1399, 1, 2, config.seriesResolverUrl);
+  if (/\{(?:tmdbId|season|episode)\}/.test(envVodUrl) || /\{(?:tmdbId|season|episode)\}/.test(envSeriesUrl)) {
+    throw new Error("Configured VOD/Series resolver URL still has unresolved placeholders");
+  }
+  console.log("Dual resolver URL (cinezo + cinejoy fallback): PASSED");
+
   console.log("\n🎉 ALL XTREAM CODES API & VOD/SERIES TESTS PASSED SUCCESSFULLY! 🎉\n");
 }
 

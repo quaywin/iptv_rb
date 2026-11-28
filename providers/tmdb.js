@@ -1221,21 +1221,21 @@ async function getSeriesInfo(seriesId, apiKey, catalogLoader = null) {
  * Build resolver URL for VOD movie.
  * No proxy=true: scrape-video 302s straight to the resolved stream instead of
  * relaying chunks through the proxy.
- * Cinejoy (https://cinejoy.pk) provides high quality streams (up to 4K HLS) with
- * multi-language audio & subtitles, resolved via scrape-video.
- * NOTE on backup mirrors: VidSrc-style players (player.videasy.ws) are not
+ * Uses Cinezo (https://player.cinezo.live) as primary with Vidnest (https://vidnest.pro)
+ * via scrape-video `fallback` param for VOD movies (higher 1080p & regional movie coverage)
+ * and Cinejoy (https://cinejoy.pk) for TV series, with multi-language audio & subtitles.
+ * NOTE on excluded mirrors: VidSrc-style players (player.videasy.ws) are not
  * usable from the VPS — their source API blocks datacenter IPs and their
  * stream tokens are IP-bound (fetching from a different IP returns 403), so
- * a server-side scrape can never serve clients in direct-302 mode. The
- * scrape-video `fallback` param stays available for future direct-mode mirrors.
+ * a server-side scrape can never serve clients in direct-302 mode.
  */
 function buildVodResolverUrl(tmdbId, template = "") {
-  const defaultTemplate = "https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Fmovie%2F{tmdbId}";
+  const defaultTemplate = "https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fplayer.cinezo.live%2Fembed%2Fmovie%2F{tmdbId}%3Fautoplay%3Dtrue&fallback=https%3A%2F%2Fvidnest.pro%2Fmovie%2F{tmdbId}";
   let tpl = template || defaultTemplate;
   if (tpl.includes("vidnest.fun")) {
     tpl = tpl
-      .replace(/vidnest\.fun%2Fmovie%2F/g, "cinejoy.pk%2Fwatch%2Fmovie%2F")
-      .replace(/vidnest\.fun\/movie\//g, "cinejoy.pk/watch/movie/");
+      .replace(/vidnest\.fun%2Fmovie%2F/g, "player.cinezo.live%2Fembed%2Fmovie%2F")
+      .replace(/vidnest\.fun\/movie\//g, "player.cinezo.live/embed/movie/");
   }
   return tpl.replace(/\{tmdbId\}/g, String(tmdbId));
 }
@@ -1244,12 +1244,12 @@ function buildVodResolverUrl(tmdbId, template = "") {
  * Build resolver URL for Series TV episode (see buildVodResolverUrl notes).
  */
 function buildSeriesResolverUrl(tmdbId, season, episode, template = "") {
-  const defaultTemplate = "https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Ftv%2F{tmdbId}%2F{season}%2F{episode}";
+  const defaultTemplate = "https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fplayer.cinezo.live%2Fembed%2Ftv%2F{tmdbId}%2F{season}%2F{episode}%3Fautoplay%3Dtrue&fallback=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Ftv%2F{tmdbId}%2F{season}%2F{episode}";
   let tpl = template || defaultTemplate;
   if (tpl.includes("vidnest.fun")) {
     tpl = tpl
-      .replace(/vidnest\.fun%2Ftv%2F/g, "cinejoy.pk%2Fwatch%2Ftv%2F")
-      .replace(/vidnest\.fun\/tv\//g, "cinejoy.pk/watch/tv/");
+      .replace(/vidnest\.fun%2Ftv%2F/g, "player.cinezo.live%2Fembed%2Ftv%2F")
+      .replace(/vidnest\.fun\/tv\//g, "player.cinezo.live/embed/tv/");
   }
   return tpl
     .replace(/\{tmdbId\}/g, String(tmdbId))

@@ -237,14 +237,14 @@ The Xtream Codes API now includes full support for **Movies (VOD)** and **TV Ser
   - **Movies**: `/movie/:username/:password/:streamId.mp4` -> resolves via `VOD_RESOLVER_URL`
   - **TV Series**: `/series/:username/:password/:episodeId.mp4` -> resolves via `SERIES_RESOLVER_URL`
   - **No `proxy=true`**: the resolver 302s straight to the resolved stream instead of relaying chunks through the proxy.
-  - **Backup mirrors**: `scrape-video` supports a `fallback` param (retries a backup page when the primary yields no source), but VidSrc-style mirrors (e.g. `player.videasy.ws`) block datacenter IPs and issue IP-bound stream tokens, so they can't serve clients via direct 302 — no backup is configured by default.
+  - **Backup mirrors**: `scrape-video` supports a `fallback` param (retries a backup page when the primary yields no source). By default, `player.cinezo.live` is used as primary with `vidnest.pro` as `fallback` for VOD movies and `cinejoy.pk` as `fallback` for TV series, while VidSrc-style mirrors (e.g. `player.videasy.ws`) remain excluded because they block datacenter IPs and issue IP-bound stream tokens.
 
 ### Resolver Configuration
 In `.env`:
 ```env
 TMDB_API_KEY=your_tmdb_api_key_here
-VOD_RESOLVER_URL=https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Fmovie%2F{tmdbId}
-SERIES_RESOLVER_URL=https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Ftv%2F{tmdbId}%2F{season}%2F{episode}
+VOD_RESOLVER_URL=https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fplayer.cinezo.live%2Fembed%2Fmovie%2F{tmdbId}%3Fautoplay%3Dtrue&fallback=https%3A%2F%2Fvidnest.pro%2Fmovie%2F{tmdbId}
+SERIES_RESOLVER_URL=https://your-proxy-domain.com/scrape-video?url=https%3A%2F%2Fplayer.cinezo.live%2Fembed%2Ftv%2F{tmdbId}%2F{season}%2F{episode}%3Fautoplay%3Dtrue&fallback=https%3A%2F%2Fcinejoy.pk%2Fwatch%2Ftv%2F{tmdbId}%2F{season}%2F{episode}
 ```
 
 ---
