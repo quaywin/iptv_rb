@@ -46,7 +46,7 @@ const config = {
   origin: env.ORIGIN || "https://strmfree.st",
   userAgent: env.USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   checkInterval: getInt(env.CHECK_INTERVAL, 5 * 60 * 1000),
-  cacheTtl: getInt(env.CACHE_TTL, 60), // in seconds
+  cacheTtl: getInt(env.CACHE_TTL, 180), // in seconds
   timeout: getInt(env.TIMEOUT, 5000),
   hoursBack: getInt(env.HOURS_BACK, 4),
   hoursAhead: getInt(env.HOURS_AHEAD, 24),

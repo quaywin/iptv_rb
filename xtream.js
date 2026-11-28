@@ -13,9 +13,11 @@ const {
   generateCinePlaylist,
   generateDamPlaylist,
   generateSports247Playlist,
+  generateLiveSportsPlaylist,
   generateCombinedPlaylist,
 } = require("./generate");
 const defaultConfig = require("./config");
+const { hasM3uStreams } = require("./utils/helpers");
 const {
   isAllCategory,
   decodeEpisodeId,
@@ -86,6 +88,11 @@ const PROVIDER_MAP = {
   // ReedStreams / GK
   gk: { filename: "gk.m3u", generator: generateGkPlaylist, title: "ReedStreams (GK)" },
   reed: { filename: "gk.m3u", generator: generateGkPlaylist, title: "ReedStreams (GK)" },
+
+  // Combined Live Sports (only sport events, without 24/7 TV clutter)
+  sports: { filename: "sports.m3u", generator: generateLiveSportsPlaylist, title: "Live Sports Combined" },
+  sport: { filename: "sports.m3u", generator: generateLiveSportsPlaylist, title: "Live Sports Combined" },
+  "live-sports": { filename: "sports.m3u", generator: generateLiveSportsPlaylist, title: "Live Sports Combined" },
 
   // Combined (All)
   all: { filename: "all.m3u", generator: generateCombinedPlaylist, title: "All Combined" },
@@ -173,6 +180,26 @@ function normalizeStreamKeyName(name) {
   return cleaned || String(name || "").trim();
 }
 
+const LIVE_NOW_CATEGORY_NAME = "🔴 LIVE NOW";
+const SPORT_EMOJI_ORDER = ["⚽", "🏀", "🏎️", "🥊", "🎾", "🏈", "🏒", "⚾", "🏏", "🏉", "🏐", "⛳", "🎯", "🏆"];
+
+function sortCategoryNames(names) {
+  return [...names].sort((a, b) => {
+    const isBottomA = a.startsWith("📺") || a === "General";
+    const isBottomB = b.startsWith("📺") || b === "General";
+    if (isBottomA !== isBottomB) return isBottomA ? 1 : -1;
+
+    const idxA = SPORT_EMOJI_ORDER.findIndex(e => a.startsWith(e));
+    const idxB = SPORT_EMOJI_ORDER.findIndex(e => b.startsWith(e));
+    if (idxA !== -1 && idxB !== -1) {
+      return idxA !== idxB ? idxA - idxB : a.localeCompare(b);
+    }
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
+
 /**
  * Parse raw M3U text into structured Xtream categories and streams
  */
@@ -213,7 +240,7 @@ function parseM3uToXtream(m3uContent) {
   }
 
   // Build categories map with deterministic category_id hashes so IDs remain stable across refreshes
-  const categoryNames = Array.from(new Set(rawItems.map(it => it.groupTitle))).sort((a, b) => a.localeCompare(b));
+  const categoryNames = sortCategoryNames(Array.from(new Set(rawItems.map(it => it.groupTitle))));
   const categoryIdMap = new Map(); // groupTitle -> category_id string
   const usedCatIds = new Set();
   const categories = categoryNames.map((name) => {
@@ -231,10 +258,30 @@ function parseM3uToXtream(m3uContent) {
     };
   });
 
+  // Prepend virtual "🔴 LIVE NOW" category when any stream is currently live
+  const hasLiveItems = rawItems.some(it => it.name.startsWith("🔴"));
+  let liveNowCatId = null;
+  if (hasLiveItems) {
+    let catNum = hashStringToInt("cat|" + LIVE_NOW_CATEGORY_NAME);
+    while (usedCatIds.has(catNum)) {
+      catNum++;
+    }
+    usedCatIds.add(catNum);
+    liveNowCatId = String(catNum);
+    categories.unshift({
+      category_id: liveNowCatId,
+      category_name: LIVE_NOW_CATEGORY_NAME,
+      parent_id: 0,
+    });
+  }
+
   // Build streams and lookup maps
   const streams = [];
   const streamMap = new Map(); // stream_id -> url
   const categoryStreams = new Map(); // category_id -> Array<stream>
+  if (liveNowCatId) {
+    categoryStreams.set(liveNowCatId, []);
+  }
   const nowTs = String(Math.floor(Date.now() / 1000));
 
   const usedIds = new Set();
@@ -248,6 +295,8 @@ function parseM3uToXtream(m3uContent) {
     usedIds.add(streamId);
 
     const catId = categoryIdMap.get(item.groupTitle) || "1";
+    const isLive = Boolean(liveNowCatId && item.name.startsWith("🔴"));
+    const categoryIds = isLive ? [Number(liveNowCatId), Number(catId)] : [Number(catId)];
 
     const streamEntry = {
       num: index + 1,
@@ -258,7 +307,7 @@ function parseM3uToXtream(m3uContent) {
       epg_channel_id: item.epgId || "",
       added: nowTs,
       category_id: catId,
-      category_ids: [Number(catId)],
+      category_ids: categoryIds,
       custom_sid: "",
       tv_archive: 0,
       direct_source: "",
@@ -272,6 +321,10 @@ function parseM3uToXtream(m3uContent) {
       categoryStreams.set(catId, []);
     }
     categoryStreams.get(catId).push(streamEntry);
+
+    if (isLive) {
+      categoryStreams.get(liveNowCatId).push(streamEntry);
+    }
   });
 
   return {
@@ -336,7 +389,7 @@ async function getOrLoadXtreamData(providerKey, getOrGeneratePlaylist, cfg) {
   if (!providerDef) return null;
 
   const now = Date.now();
-  const ttlMs = (cfg.cacheTtl || 60) * 1000;
+  const ttlMs = (cfg.cacheTtl || 180) * 1000;
   const cached = xtreamCache.get(providerKey);
 
   if (cached && (now - cached.timestamp < ttlMs)) {
@@ -349,7 +402,7 @@ async function getOrLoadXtreamData(providerKey, getOrGeneratePlaylist, cfg) {
 
   const loadPromise = (async () => {
     const m3uContent = await getOrGeneratePlaylist(providerDef.filename, providerDef.generator, providerKey);
-    if (!m3uContent?.trim()) {
+    if (!hasM3uStreams(m3uContent)) {
       return cached || null;
     }
 
@@ -488,7 +541,7 @@ async function handleLiveStreamPlayback({ username, password, rawStream, config,
 /**
  * Main Xtream Codes router and request handler
  */
-async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGeneratePlaylist, edgeCache = null }) {
+async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGeneratePlaylist, edgeCache = null, catalogLoader = null }) {
   const pathname = url.pathname.toLowerCase();
   const method = req.method ? req.method.toUpperCase() : "GET";
   const userAgent = req.headers.get("user-agent") || "none";
@@ -609,7 +662,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       return response;
     };
 
-    const liveCacheTtl = config.cacheTtl || 60;
+    const liveCacheTtl = config.cacheTtl || 180;
 
     // Action: get_live_categories
     if (action === "get_live_categories") {
@@ -707,7 +760,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const cachedRes = await tryEdgeMatch(cacheKey);
       if (cachedRes) return cachedRes;
 
-      const streams = await getVodStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
+      const streams = await getVodStreams(catId, config?.tmdbApiKey, page, search, hasPageParam, catalogLoader);
       const totalCount = streams._totalCount !== undefined ? streams._totalCount : (hasPageParam ? 1000 : streams.length);
       console.log(`[XTREAM ${timeStr}] 🎬 get_vod_streams (category: "${catId || "all"}", page: ${page}, search: "${search || ""}") -> ${streams.length} movies`);
       const res = Response.json(streams, {
@@ -734,7 +787,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const cachedRes = await tryEdgeMatch(cacheKey);
       if (cachedRes) return cachedRes;
 
-      const info = await getVodInfo(vodId, config?.tmdbApiKey);
+      const info = await getVodInfo(vodId, config?.tmdbApiKey, catalogLoader);
       console.log(`[XTREAM ${timeStr}] 🎬 get_vod_info (vodId: ${vodId}) -> "${info?.info?.name || "unknown"}"`);
       const res = Response.json(info, {
         status: 200,
@@ -798,7 +851,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const cachedRes = await tryEdgeMatch(cacheKey);
       if (cachedRes) return cachedRes;
 
-      const series = await getSeriesStreams(catId, config?.tmdbApiKey, page, search, hasPageParam);
+      const series = await getSeriesStreams(catId, config?.tmdbApiKey, page, search, hasPageParam, catalogLoader);
       const totalCount = series._totalCount !== undefined ? series._totalCount : (hasPageParam ? 1000 : series.length);
       console.log(`[XTREAM ${timeStr}] 🍿 get_series (category: "${catId || "all"}", page: ${page}, search: "${search || ""}") -> ${series.length} series`);
       const res = Response.json(series, {
@@ -842,7 +895,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
         type.includes("show");
 
       if (isSeries) {
-        const series = await getSeriesStreams(null, config?.tmdbApiKey, page, query, true);
+        const series = await getSeriesStreams(null, config?.tmdbApiKey, page, query, true, catalogLoader);
         console.log(`[XTREAM ${timeStr}] 🔎 ${action} [SERIES] (query: "${query}", page: ${page}) -> ${series.length} series`);
         const res = Response.json(series, {
           status: 200,
@@ -859,7 +912,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       }
 
       // Default search: VOD (movies) only - strict separation between VOD and Series schemas
-      const streams = await getVodStreams(null, config?.tmdbApiKey, page, query, true);
+      const streams = await getVodStreams(null, config?.tmdbApiKey, page, query, true, catalogLoader);
       console.log(`[XTREAM ${timeStr}] 🔎 ${action} [VOD] (query: "${query}", page: ${page}) -> ${streams.length} movies`);
       const res = Response.json(streams, {
         status: 200,
@@ -885,7 +938,7 @@ async function handleXtreamRequest({ req, url, config = defaultConfig, getOrGene
       const cachedRes = await tryEdgeMatch(cacheKey);
       if (cachedRes) return cachedRes;
 
-      const info = await getSeriesInfo(seriesId, config?.tmdbApiKey);
+      const info = await getSeriesInfo(seriesId, config?.tmdbApiKey, catalogLoader);
       console.log(`[XTREAM ${timeStr}] 🍿 get_series_info (seriesId: ${seriesId}) -> "${info?.info?.name || "unknown"}" (${info?.seasons?.length || 0} seasons)`);
       const res = Response.json(info, {
         status: 200,

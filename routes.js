@@ -13,6 +13,7 @@ const {
   generateCinePlaylist,
   generateDamPlaylist,
   generateSports247Playlist,
+  generateLiveSportsPlaylist,
   generateCombinedPlaylist,
 } = require("./generate");
 
@@ -75,6 +76,11 @@ const ROUTES = {
   "/247.m3u": { filename: "247.m3u", generator: generateSports247Playlist },
   "/sports247": { filename: "247.m3u", generator: generateSports247Playlist },
   "/sports247.m3u": { filename: "247.m3u", generator: generateSports247Playlist },
+
+  "/sports": { filename: "sports.m3u", generator: generateLiveSportsPlaylist },
+  "/sports.m3u": { filename: "sports.m3u", generator: generateLiveSportsPlaylist },
+  "/live-sports": { filename: "sports.m3u", generator: generateLiveSportsPlaylist },
+  "/live-sports.m3u": { filename: "sports.m3u", generator: generateLiveSportsPlaylist },
 
   "/all": { filename: "all.m3u", generator: generateCombinedPlaylist },
   "/all.m3u": { filename: "all.m3u", generator: generateCombinedPlaylist },

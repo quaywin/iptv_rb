@@ -4,10 +4,16 @@ const {
   mergeConfig,
   fetchWithFallback,
   PROVIDER_MIRRORS,
+  sanitizeM3uAttr,
+  normalizeChannelKey,
+  getQualityRank,
+  scoreBroadcastChannel,
+  normalizeSportGroup,
 } = require("../utils/helpers");
 
-// In-memory cache for event detail pages when using fallback HTML scraping
+// In-memory cache for event detail pages when using fallback HTML scraping (bounded)
 const eventDetailCache = new Map();
+const MAX_DETAIL_CACHE_ENTRIES = 200;
 const DETAIL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Hosts for Matchora API (with multi-domain redundancy)
@@ -214,6 +220,10 @@ async function fetchEventDetails(eventUrl, userAgent, timeoutMs = 6000) {
     }
 
     const result = { channels, startsAt, endsAt, sport, timestamp: now };
+    if (eventDetailCache.size >= MAX_DETAIL_CACHE_ENTRIES) {
+      const oldestKey = eventDetailCache.keys().next().value;
+      if (oldestKey !== undefined) eventDetailCache.delete(oldestKey);
+    }
     eventDetailCache.set(eventUrl, result);
     return result;
   } catch (e) {
@@ -311,7 +321,9 @@ async function fetchSports247EventsFromHtml(cfg) {
   }
 
   const rawEvents = Array.from(eventMap.values());
-  const enriched = await mapConcurrent(rawEvents, 8, async (evt) => {
+  rawEvents.sort((a, b) => (a.isLive === b.isLive ? 0 : a.isLive ? -1 : 1));
+  const cappedEvents = rawEvents.slice(0, 20);
+  const enriched = await mapConcurrent(cappedEvents, 8, async (evt) => {
     const details = await fetchEventDetails(evt.url, cfg.userAgent, cfg.timeout || 6000);
     return {
       ...evt,
@@ -324,89 +336,7 @@ async function fetchSports247EventsFromHtml(cfg) {
   return enriched;
 }
 
-/**
- * Normalize channel name to identify identical broadcast channels across feeds
- * e.g. "BEIN SPORTS 3" and "beIN Sport 03" -> "beinsport3"
- */
-function normalizeChannelKey(name = "") {
-  if (!name) return "";
-  return name
-    .toLowerCase()
-    .replace(/\bsports\b/g, "sport")
-    .replace(/\b0+(\d+)\b/g, "$1")
-    .replace(/[^a-z0-9]/g, "")
-    .trim();
-}
-
-/**
- * Calculate numeric tier for video resolution:
- * 3 = 4K / UHD / Full HD (1080p)
- * 2 = HD (720p)
- * 1 = Default / Unspecified web stream
- * 0 = SD (480p / 360p)
- */
-function getQualityRank(qualityStr = "") {
-  const q = (qualityStr || "").toUpperCase();
-  if (q.includes("4K") || q.includes("UHD") || q.includes("FHD") || q.includes("1080")) {
-    return 3;
-  }
-  if (q.includes("HD") || q.includes("720")) {
-    return 2;
-  }
-  if (q.includes("SD") || q.includes("480") || q.includes("360")) {
-    return 0;
-  }
-  return 1;
-}
-
-/**
- * Smart Channel Ranking Score:
- * Strictly prioritizes Full HD > HD > Web/Default > SD,
- * while factoring in playback health, viewer popularity, language, and broadcaster reputation.
- */
-function scoreChannel(ch, isLive = false) {
-  if (ch.dead) return -9999;
-  let score = 0;
-
-  // 1. Resolution / Quality weighting (Primary tiering factor)
-  // Ensures FHD always dominates HD, and HD always dominates SD
-  const qRank = getQualityRank(ch.quality);
-  if (qRank === 3) score += 3000;       // Full HD / 4K / 1080p
-  else if (qRank === 2) score += 1800;  // HD / 720p
-  else if (qRank === 1) score += 900;   // Default / Web stream
-  else if (qRank === 0) score += 0;     // SD (heavily deprioritized)
-
-  // 2. Live playback confirmation
-  // Only heavily prioritize when match is live; upcoming 24/7 channels running in background shouldn't overpower event feeds
-  if (ch.playing) {
-    score += isLive ? 400 : 50;
-  }
-
-  // 3. Viewer count / popularity (real active viewers, capped at 150 pts so quality tier dominates)
-  const watching = typeof ch.watching === "number" ? ch.watching : (parseInt(ch.watching, 10) || 0);
-  score += Math.min(watching * 2, 150);
-
-  // 4. Audio / Language prioritization
-  const lang = (ch.lang || "").toLowerCase();
-  if (lang.includes("en") || lang.includes("english")) {
-    score += 300;
-  } else if (["es", "spanish", "fr", "french", "pt", "portuguese", "de", "german", "it", "italian", "ar", "arabic"].some(l => lang.includes(l))) {
-    score += 120;
-  } else if (lang) {
-    score += 40;
-  }
-
-  // 5. Popular Broadcasters bonus (+150 pts)
-  const name = (ch.name || "").toLowerCase();
-  const topBroadcasters = [
-    "tnt", "sky", "espn", "tsn", "sportsnet", "canal", "bein", "dazn", "paramount", "stan", "nbc", "peacock", "supersport", "optus"
-  ];
-  if (topBroadcasters.some(b => name.includes(b))) {
-    score += 150;
-  }
-
-  return score;
-}
+const scoreChannel = scoreBroadcastChannel;
 
 /**
  * Fetch events: First tries Matchora API, falls back to Sports247 HTML scraping
@@ -455,7 +385,8 @@ async function generateSports247Playlist(customConfig = {}) {
     if (!evt || !evt.channels || evt.channels.length === 0) continue;
 
     const sportIcon = getExactSportIcon(evt.sport, evt.league);
-    const groupTitle = evt.league ? `${sportIcon} ${evt.league}`.trim() : `${sportIcon} Sports`;
+    const groupTitle = normalizeSportGroup(evt.sport, evt.league);
+    const leagueTag = evt.league ? `[${evt.league}]` : "";
     const defaultLogo = evt.logo || evt.leagueLogo || "";
     const logo = getLeagueLogo(evt.league, defaultLogo);
 
@@ -504,19 +435,20 @@ async function generateSports247Playlist(customConfig = {}) {
       const extraInfo = [channelLabel, qualityLabel, langLabel].filter(Boolean).join(" ");
 
       let channelName = extraInfo
-        ? `${evt.title} - ${extraInfo} ${timePart} ${sportIcon}`
-        : `${evt.title} ${timePart} ${sportIcon}`;
+        ? `${evt.title} ${leagueTag} - ${extraInfo} ${timePart} ${sportIcon}`
+        : `${evt.title} ${leagueTag} ${timePart} ${sportIcon}`;
 
       if (evt.isLive) {
         channelName = `🔴 ${channelName}`;
       }
 
-      channelName = channelName.replace(/\s+/g, " ").trim();
+      const safeChannelName = sanitizeM3uAttr(channelName);
+      const safeGroupTitle = sanitizeM3uAttr(groupTitle);
 
       const itemLogo = ch.logo && ch.logo.startsWith("http") ? ch.logo : logo;
       const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(ch.embed)}` : ch.embed;
 
-      m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${itemLogo}" group-title="${groupTitle}",${channelName}\n`;
+      m3uContent += `#EXTINF:-1 tvg-name="${safeChannelName}" tvg-logo="${itemLogo}" group-title="${safeGroupTitle}",${safeChannelName}\n`;
       m3uContent += `${scrapeUrl}\n\n`;
       streamCount++;
     }

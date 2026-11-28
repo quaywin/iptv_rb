@@ -1,12 +1,13 @@
 const {
   formatTime,
   getSportIcon,
-  capitalize,
   getLeagueLogo,
   mergeConfig,
   fetchWithFallback,
   buildCandidateUrls,
   PROVIDER_MIRRORS,
+  sanitizeM3uAttr,
+  normalizeSportGroup,
 } = require("../utils/helpers");
 
 /**
@@ -43,7 +44,7 @@ async function fetchStrmStreamList(cfg) {
     return allStreams;
   } catch (error) {
     console.error("Error fetching STRM stream list:", error.message);
-    return [];
+    throw new Error(`STRM fetch failed: ${error.message}`);
   }
 }
 
@@ -146,7 +147,7 @@ async function generateStrmPlaylist(customConfig = {}) {
       channelName = `🔴 ${channelName}`;
     }
 
-    const groupTitle = capitalize(category);
+    const groupTitle = is24_7 ? "📺 24/7 Sports Channels" : normalizeSportGroup(category, stream.league);
 
     let defaultLogo = stream.team1?.logo || "";
     if (!defaultLogo && stream.thumbnail_url) {
@@ -165,7 +166,10 @@ async function generateStrmPlaylist(customConfig = {}) {
     const sep = scrapeBase ? (scrapeBase.includes("?") ? "&" : "?") : "?";
     const scrapeUrl = scrapeBase ? `${scrapeBase}${sep}url=${encodeURIComponent(embedUrl)}` : embedUrl;
 
-    m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
+    const safeChannelName = sanitizeM3uAttr(channelName);
+    const safeGroupTitle = sanitizeM3uAttr(groupTitle);
+
+    m3uContent += `#EXTINF:-1 tvg-name="${safeChannelName}" tvg-logo="${logo}" group-title="${safeGroupTitle}",${safeChannelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;
   }
 

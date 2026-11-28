@@ -2,12 +2,13 @@ const {
   formatTime,
   getSportIcon,
   parseTimTime,
-  capitalize,
   getLeagueLogo,
   mergeConfig,
   fetchWithFallback,
   buildCandidateUrls,
   PROVIDER_MIRRORS,
+  sanitizeM3uAttr,
+  normalizeSportGroup,
 } = require("../utils/helpers");
 
 /**
@@ -122,20 +123,27 @@ async function generateGkPlaylist(customConfig = {}) {
     const sportIcon = getSportIcon(m.category, "gk");
     const isLive = isLiveMatch(m);
 
+    const leagueSuffix = m.leagueName && !m.name.toLowerCase().includes(String(m.leagueName).toLowerCase())
+      ? ` [${m.leagueName}]`
+      : "";
+
     let channelName = m.starts_at
-      ? `${m.name} | ${formatTime(m.starts_at, cfg.timezone)} ${sportIcon}`
-      : `${m.name} ${sportIcon}`;
+      ? `${m.name}${leagueSuffix} | ${formatTime(m.starts_at, cfg.timezone)} ${sportIcon}`
+      : `${m.name}${leagueSuffix} ${sportIcon}`;
 
     if (isLive) {
       channelName = `🔴 ${channelName}`;
     }
 
-    const groupTitle = m.leagueName || capitalize(m.category) || "Sports";
+    const groupTitle = normalizeSportGroup(m.category, m.leagueName);
     const defaultLogo = m.poster || "";
     const logo = getLeagueLogo(m.leagueName || m.category, defaultLogo);
     const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(m.embedUrl)}` : m.embedUrl;
 
-    m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
+    const safeChannelName = sanitizeM3uAttr(channelName);
+    const safeGroupTitle = sanitizeM3uAttr(groupTitle);
+
+    m3uContent += `#EXTINF:-1 tvg-name="${safeChannelName}" tvg-logo="${logo}" group-title="${safeGroupTitle}",${safeChannelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;
   }
 

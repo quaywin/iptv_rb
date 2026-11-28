@@ -1,12 +1,13 @@
 const {
   formatTime,
   getSportIcon,
-  capitalize,
   getLeagueLogo,
   mergeConfig,
   fetchWithFallback,
   buildCandidateUrls,
   PROVIDER_MIRRORS,
+  sanitizeM3uAttr,
+  normalizeSportGroup,
 } = require("../utils/helpers");
 
 /**
@@ -123,20 +124,27 @@ async function generatePitPlaylist(customConfig = {}) {
     const sportIcon = getSportIcon(p.competitionSlug || p.category, "pit");
     const isLive = isLiveStream(p);
 
+    const leagueSuffix = p.category && p.category !== "Sports" && !p.name.toLowerCase().includes(String(p.category).toLowerCase())
+      ? ` [${p.category}]`
+      : "";
+
     let channelName = p.starts_at
-      ? `${p.name} | ${formatTime(p.starts_at, cfg.timezone)} ${sportIcon}`
-      : `${p.name} ${sportIcon}`;
+      ? `${p.name}${leagueSuffix} | ${formatTime(p.starts_at, cfg.timezone)} ${sportIcon}`
+      : `${p.name}${leagueSuffix} ${sportIcon}`;
 
     if (isLive) {
       channelName = `🔴 ${channelName}`;
     }
 
-    const groupTitle = p.category || "Sports";
+    const groupTitle = normalizeSportGroup(p.competitionSlug || p.category, p.category);
     const defaultLogo = p.logo || "";
     const logo = getLeagueLogo(p.competitionSlug || p.category, defaultLogo);
     const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(p.playUrl)}` : p.playUrl;
 
-    m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
+    const safeChannelName = sanitizeM3uAttr(channelName);
+    const safeGroupTitle = sanitizeM3uAttr(groupTitle);
+
+    m3uContent += `#EXTINF:-1 tvg-name="${safeChannelName}" tvg-logo="${logo}" group-title="${safeGroupTitle}",${safeChannelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;
   }
 

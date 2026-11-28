@@ -4,6 +4,8 @@ const {
   getLeagueLogo,
   mergeConfig,
   fetchWithFallback,
+  sanitizeM3uAttr,
+  normalizeSportGroup,
 } = require("../utils/helpers");
 
 /**
@@ -138,12 +140,15 @@ async function generatePpvPlaylist(customConfig = {}) {
       channelName = `🔴 ${channelName}`;
     }
 
-    const groupTitle = s.category || "Sports";
+    const groupTitle = is24_7 ? "📺 24/7 Sports Channels" : normalizeSportGroup(s.category, s.tag);
     const defaultLogo = s.poster || "";
     const logo = getLeagueLogo(s.tag || s.category, defaultLogo);
     const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(s.iframe)}` : s.iframe;
 
-    m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
+    const safeChannelName = sanitizeM3uAttr(channelName);
+    const safeGroupTitle = sanitizeM3uAttr(groupTitle);
+
+    m3uContent += `#EXTINF:-1 tvg-name="${safeChannelName}" tvg-logo="${logo}" group-title="${safeGroupTitle}",${safeChannelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;
   }
 

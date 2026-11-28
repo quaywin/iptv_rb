@@ -13,6 +13,47 @@ const { generateChannel4Playlist, fetchSports247Channels, getSports247ChannelCou
 const { generateChannel5Playlist, fetchCdnChannelsList, getCdnChannelCountry } = require("./providers/channel5");
 const { generateCdnPlaylist, fetchCdnEventsList } = require("./providers/cdn");
 
+const { hasM3uStreams } = require("./utils/helpers");
+
+/**
+ * Generate combined live sports playlist (only live sport events, omitting 5,000+ 24/7 TV channels)
+ */
+async function generateLiveSportsPlaylist(customConfig = {}) {
+  const getSub = (filename, generator) => {
+    if (typeof customConfig.getCachedPlaylist === "function") {
+      return customConfig.getCachedPlaylist(filename, () => generator(customConfig));
+    }
+    return generator(customConfig);
+  };
+
+  const sources = [
+    ["247.m3u", generateSports247Playlist, "Sports247"],
+    ["cdn.m3u", generateCdnPlaylist, "CDN Events"],
+    ["strm.m3u", generateStrmPlaylist, "STRM"],
+    ["ppv.m3u", generatePpvPlaylist, "PPV"],
+    ["dam.m3u", generateDamPlaylist, "DAM"],
+    ["pit.m3u", generatePitPlaylist, "PitSport"],
+    ["cine.m3u", generateCinePlaylist, "Cinevid"],
+  ];
+
+  const results = await Promise.all(
+    sources.map(([filename, gen, label]) =>
+      getSub(filename, gen).catch(e => {
+        console.error(`${label} error in live sports:`, e.message);
+        return "";
+      })
+    )
+  );
+
+  const parts = results
+    .filter(p => hasM3uStreams(p))
+    .map(p => p.replace(/^#EXTM3U[^\n]*\n+/i, "").trim())
+    .filter(Boolean);
+
+  if (!parts.length) return "#EXTM3U tvg-shift=0 m3uautoload=1\n\n";
+  return `#EXTM3U tvg-shift=0 m3uautoload=1\n\n${parts.join("\n\n")}\n`;
+}
+
 /**
  * Generate combined playlist from all providers
  * If getCachedPlaylist function is passed via customConfig, it reuses fresh cached data if available.
@@ -85,6 +126,7 @@ async function generateCombinedPlaylist(customConfig = {}) {
   ]);
 
   const parts = [strm, ppv, timLive, timChannels, channel2, channel3, gk, pit, cine, dam, s247, channel4, channel5, cdn]
+    .filter(p => hasM3uStreams(p))
     .map(p => (p || "").replace(/^#EXTM3U[^\n]*\n+/i, "").trim())
     .filter(Boolean);
 
@@ -117,6 +159,7 @@ module.exports = {
   generateDamPlaylist,
   generateOndemandPlaylist,
   generateSports247Playlist,
+  generateLiveSportsPlaylist,
   generateCombinedPlaylist,
 
   // Stream Fetchers

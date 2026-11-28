@@ -128,12 +128,24 @@ const VOD_CATEGORIES = [
   { category_id: "1021", category_name: "Vũ Trụ MonsterVerse (Godzilla & Kong)", parent_id: 0, query: { special: "monsterverse", sort_by: "popularity.desc" } },
   { category_id: "1022", category_name: "Điệp Viên 007 (James Bond)", parent_id: 0, query: { special: "james_bond", sort_by: "popularity.desc" } },
 
-  // Tuyệt tác & Hoạt hình đỉnh cao
-  { category_id: "1025", category_name: "Tuyệt Tác IMDb Top 250", parent_id: 0, query: { sort_by: "vote_average.desc", "vote_count.gte": "8000" } },
+  // Tuyệt tác, Giải thưởng & Hoạt hình đỉnh cao
+  { category_id: "1040", category_name: "🏆 Phim Đoạt Giải (Oscar & Cannes)", parent_id: 0, query: { special: "award_winning" } },
+  { category_id: "1041", category_name: "📖 Dựa Trên Chuyện Có Thật", parent_id: 0, query: { with_keywords: "9672", without_genres: "27", "vote_average.gte": "6.8", "vote_count.gte": "300", sort_by: "popularity.desc" } },
+  { category_id: "1042", category_name: "🧠 Hại Não & Plot Twist", parent_id: 0, query: { with_keywords: "275311|326438|184312|12565|335567", without_genres: "27", "vote_average.gte": "6.8", "vote_count.gte": "150", sort_by: "vote_count.desc" } },
+  { category_id: "1025", category_name: "Tuyệt Tác IMDb Top 250", parent_id: 0, query: { sort_by: "vote_average.desc", "vote_count.gte": "4000" } },
   { category_id: "1024", category_name: "Hoạt Hình Studio Ghibli", parent_id: 0, query: { with_companies: "10342", sort_by: "popularity.desc" } },
   { category_id: "1006", category_name: "Phim Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "1000" } },
   { category_id: "1007", category_name: "Phim Hoạt Hình Chiếu Rạp", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
   { category_id: "1011", category_name: "Phim Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
+
+  // Thể loại chính (Core Genres - omit Horror)
+  { category_id: "1050", category_name: "💥 Phim Hành Động", parent_id: 0, query: { with_genres: "28", without_genres: "27", "vote_count.gte": "300", sort_by: "popularity.desc" } },
+  { category_id: "1051", category_name: "🚀 Khoa Học Viễn Tưởng (Sci-Fi)", parent_id: 0, query: { with_genres: "878", without_genres: "27", "vote_count.gte": "200", sort_by: "popularity.desc" } },
+  { category_id: "1052", category_name: "🧙 Phiêu Lưu & Kỳ Ảo", parent_id: 0, query: { with_genres: "12|14", without_genres: "27", "vote_count.gte": "200", sort_by: "popularity.desc" } },
+  { category_id: "1053", category_name: "😂 Phim Hài Hước", parent_id: 0, query: { with_genres: "35", without_genres: "27", "vote_count.gte": "200", sort_by: "popularity.desc" } },
+  { category_id: "1054", category_name: "🕵️ Hình Sự & Trinh Thám", parent_id: 0, query: { with_genres: "80|9648", without_genres: "27", "vote_count.gte": "200", sort_by: "popularity.desc" } },
+  { category_id: "1055", category_name: "❤️ Tâm Lý & Tình Cảm", parent_id: 0, query: { with_genres: "18|10749", without_genres: "27", "vote_count.gte": "300", sort_by: "popularity.desc" } },
+  { category_id: "1056", category_name: "⚔️ Chiến Tranh & Lịch Sử", parent_id: 0, query: { with_genres: "10752|36", without_genres: "27", "vote_count.gte": "150", sort_by: "popularity.desc" } },
 
   // Thiếu nhi & Hoạt hình theo lứa tuổi (Kids & Family by Age)
   { category_id: "1030", category_name: "👶 Thiếu Nhi Mầm Non (0-5 tuổi)", parent_id: 0, query: { certification_country: "US", certification: "G", with_genres: "16|10751", sort_by: "popularity.desc" } },
@@ -185,6 +197,299 @@ function isAllCategory(catId) {
 }
 
 const CURATED_YEARS = new Set(["2023", "2024", "2025", "2026"]);
+const localCatalogCache = new Map(); // type -> { mtimeMs, catalog }
+
+function settledValues(promises) {
+  return Promise.allSettled(promises).then(results =>
+    results
+      .filter(r => r.status === "fulfilled" && r.value !== undefined && r.value !== null)
+      .map(r => r.value)
+  );
+}
+
+function isReleasedDate(dateStr, todayStr) {
+  if (!dateStr || typeof dateStr !== "string") return false;
+  const clean = dateStr.trim().substring(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return false;
+  return clean <= todayStr;
+}
+
+function dedupeById(list) {
+  const seen = new Set();
+  const out = [];
+  for (const item of list) {
+    if (item?.id && !seen.has(item.id)) {
+      seen.add(item.id);
+      out.push(item);
+    }
+  }
+  return out;
+}
+
+async function fetchPagedTmdb(endpoint, params, maxPages, apiKey) {
+  const first = await fetchTmdb(endpoint, { ...params, page: "1" }, apiKey);
+  const firstItems = first?.results || [];
+  const totalPages = Math.min(maxPages, Math.max(1, Number(first?.total_pages || 1)));
+  if (totalPages <= 1) {
+    return { items: dedupeById(firstItems), totalResults: Number(first?.total_results || firstItems.length) };
+  }
+  const restPages = [];
+  for (let p = 2; p <= totalPages; p++) {
+    restPages.push(fetchTmdb(endpoint, { ...params, page: String(p) }, apiKey));
+  }
+  const restResponses = await settledValues(restPages);
+  const combined = [...firstItems, ...restResponses.flatMap(r => r?.results || [])];
+  return {
+    items: dedupeById(combined),
+    totalResults: Number(first?.total_results || combined.length),
+  };
+}
+
+function indexCatalog(raw) {
+  if (!raw || !Array.isArray(raw.items)) return null;
+  const itemById = new Map();
+  for (const item of raw.items) {
+    const id = Number(item.stream_id || item.series_id);
+    if (Number.isFinite(id) && id > 0) {
+      itemById.set(id, item);
+    }
+  }
+  return { ...raw, itemById };
+}
+
+function loadLocalCatalog(type) {
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    const filePath = path.join(__dirname, "..", "public", "catalog", `${type}.json`);
+    if (!fs.existsSync(filePath)) return null;
+    const stat = fs.statSync(filePath);
+    const cached = localCatalogCache.get(type);
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      return cached.catalog;
+    }
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    const indexed = indexCatalog(parsed);
+    if (indexed) {
+      localCatalogCache.set(type, { mtimeMs: stat.mtimeMs, catalog: indexed });
+    }
+    return indexed;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function resolveCatalog(type, catalogLoader) {
+  try {
+    if (type === "vod" && typeof catalogLoader?.getVodCatalog === "function") {
+      const cat = await catalogLoader.getVodCatalog();
+      if (cat?.itemById) return cat;
+      if (cat) return indexCatalog(cat);
+    }
+    if (type === "series" && typeof catalogLoader?.getSeriesCatalog === "function") {
+      const cat = await catalogLoader.getSeriesCatalog();
+      if (cat?.itemById) return cat;
+      if (cat) return indexCatalog(cat);
+    }
+  } catch (_) {}
+  return loadLocalCatalog(type);
+}
+
+function serveFromCatalog(catalog, categoryId, page, hasPageParam) {
+  let fullList = [];
+  if (isAllCategory(categoryId)) {
+    fullList = catalog.items || [];
+  } else {
+    const catKey = String(categoryId);
+    const ids = catalog.byCategory?.[catKey] || [];
+    for (const id of ids) {
+      const item = catalog.itemById?.get(Number(id));
+      if (item) {
+        fullList.push({ ...item, category_id: catKey });
+      }
+    }
+  }
+
+  const sliced = hasPageParam
+    ? fullList.slice((page - 1) * 20, page * 20)
+    : fullList;
+  const baseNum = hasPageParam ? (page - 1) * 20 : 0;
+  const result = sliced.map((item, idx) => ({ ...item, num: baseNum + idx + 1 }));
+  Object.defineProperty(result, "_totalCount", {
+    value: fullList.length,
+    enumerable: false,
+  });
+  return result;
+}
+
+function searchLocalCatalog(catalog, query) {
+  if (!catalog?.items || !query) return [];
+  const q = query.trim().toLowerCase();
+  return catalog.items.filter(it =>
+    String(it.title || it.name || "").toLowerCase().includes(q)
+  );
+}
+
+function mapVodItem(m, idx, primaryCatId, categoryIdsSet = null) {
+  const year = m.release_date ? m.release_date.substring(0, 4) : "";
+  const parsedMs = m.release_date ? Date.parse(m.release_date) : NaN;
+  const addedTs = Number.isFinite(parsedMs) ? Math.max(0, Math.floor(parsedMs / 1000)) : 0;
+  const rawCatIds = categoryIdsSet
+    ? Array.from(categoryIdsSet)
+    : [primaryCatId, CURATED_YEARS.has(year) ? year : null].filter(Boolean);
+  const categoryIds = Array.from(
+    new Set(rawCatIds.map(id => Number(id)).filter(n => Number.isFinite(n) && n > 0))
+  );
+
+  return {
+    num: idx + 1,
+    name: year ? `${m.title} (${year})` : m.title,
+    title: m.title,
+    year,
+    stream_type: "movie",
+    stream_id: m.id,
+    stream_icon: m.poster_path ? `${TMDB_IMAGE_BASE}/w500${m.poster_path}` : "",
+    rating: String(m.vote_average || 0),
+    rating_5based: Number(((m.vote_average || 0) / 2).toFixed(1)),
+    added: String(addedTs),
+    category_id: String(primaryCatId),
+    category_ids: categoryIds,
+    container_extension: "mp4",
+    custom_sid: "",
+    direct_source: "",
+  };
+}
+
+function mapSeriesItem(s, idx, primaryCatId, categoryIdsSet = null) {
+  const year = s.first_air_date ? s.first_air_date.substring(0, 4) : "";
+  const parsedMs = s.first_air_date ? Date.parse(s.first_air_date) : NaN;
+  const airDateTs = s.first_air_date
+    ? String(Number.isFinite(parsedMs) ? Math.max(0, Math.floor(parsedMs / 1000)) : 0)
+    : String(Math.floor(Date.now() / 1000));
+  const rawCatIds = categoryIdsSet
+    ? Array.from(categoryIdsSet)
+    : [primaryCatId, CURATED_YEARS.has(year) ? year : null].filter(Boolean);
+  const categoryIds = Array.from(
+    new Set(rawCatIds.map(id => Number(id)).filter(n => Number.isFinite(n) && n > 0))
+  );
+  const iconUrl = s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : "";
+
+  const rawPlot = String(s.overview || "").trim();
+  const compactPlot = rawPlot.length > 180 ? `${rawPlot.slice(0, 177).trimEnd()}...` : rawPlot;
+
+  return {
+    num: idx + 1,
+    name: year ? `${s.name} (${year})` : s.name,
+    title: s.name,
+    year,
+    stream_type: "series",
+    stream_id: s.id,
+    series_id: s.id,
+    cover: iconUrl,
+    stream_icon: iconUrl,
+    category_id: String(primaryCatId),
+    category_ids: categoryIds,
+    plot: compactPlot,
+    cast: "",
+    director: "",
+    genre: "",
+    releaseDate: s.first_air_date || "",
+    last_modified: airDateTs,
+    added: airDateTs,
+    rating: String(s.vote_average || 0),
+    rating_5based: Number(((s.vote_average || 0) / 2).toFixed(1)),
+    backdrop_path: s.backdrop_path ? [`${TMDB_IMAGE_BASE}/w1280${s.backdrop_path}`] : [],
+    youtube_trailer: "",
+    episode_run_time: "45",
+  };
+}
+
+const CANNES_FESTIVAL_MOVIE_IDS = [
+  915935, 497828, 505192, 423, 680, 28, 103, 8967,
+  86837, 448776, 266034, 374473, 582, 517814, 194, 496243,
+];
+
+const EMMY_GLOBE_SERIES_IDS = [
+  126308, 136315, 76331, 95396, 111803, 241259, 100757, 154385,
+  194764, 100088, 95480, 83867, 93405, 97546, 124101, 125935,
+  87739, 87108, 65494, 79788, 67070, 61662, 70796, 69478,
+  66292, 60622, 60059, 46648, 1399, 1396, 1104, 1398, 1438, 4613,
+];
+
+async function fetchSpecialVodCategory(special, apiKey) {
+  if (special === "award_winning") {
+    const [oscarPages, cannesMovies] = await Promise.all([
+      settledValues([1, 2, 3, 4, 5].map(p => fetchTmdb("/list/28", { page: String(p) }, apiKey))),
+      settledValues(CANNES_FESTIVAL_MOVIE_IDS.map(id => fetchTmdb(`/movie/${id}`, {}, apiKey))),
+    ]);
+    const listItems = oscarPages.flatMap(r => r?.items || []);
+    const merged = dedupeById([...cannesMovies, ...listItems]);
+    merged.sort((a, b) => new Date(b.release_date || 0) - new Date(a.release_date || 0));
+    return merged;
+  }
+  if (special === "harry_potter") {
+    const cols = await settledValues([
+      fetchTmdb("/collection/1241", {}, apiKey),
+      fetchTmdb("/collection/435259", {}, apiKey),
+    ]);
+    return dedupeById(cols.flatMap(c => c?.parts || []));
+  }
+  if (special === "lotr") {
+    const cols = await settledValues([
+      fetchTmdb("/collection/119", {}, apiKey),
+      fetchTmdb("/collection/121938", {}, apiKey),
+    ]);
+    return dedupeById(cols.flatMap(c => c?.parts || []));
+  }
+  if (special === "fast_and_furious") {
+    const col = await fetchTmdb("/collection/9485", {}, apiKey);
+    return dedupeById(col?.parts || []);
+  }
+  if (special === "monsterverse") {
+    const res = await settledValues([
+      fetchTmdb("/collection/535313", {}, apiKey),
+      fetchTmdb("/search/movie", { query: "Godzilla" }, apiKey),
+      fetchTmdb("/search/movie", { query: "Kong" }, apiKey),
+    ]);
+    const colParts = res[0]?.parts || [];
+    const searchItems = res.slice(1).flatMap(r => r?.results || []).filter(
+      m => (m.vote_count || 0) >= 50 && !(m.genre_ids || []).includes(99)
+    );
+    return dedupeById([...colParts, ...searchItems]);
+  }
+  if (special === "james_bond") {
+    const col = await fetchTmdb("/collection/645", {}, apiKey);
+    return dedupeById(col?.parts || []);
+  }
+  return [];
+}
+
+async function fetchSpecialSeriesCategory(special, apiKey) {
+  if (special === "award_winning_tv") {
+    const collected = [];
+    for (let i = 0; i < EMMY_GLOBE_SERIES_IDS.length; i += 8) {
+      const batch = EMMY_GLOBE_SERIES_IDS.slice(i, i + 8);
+      const res = await settledValues(batch.map(id => fetchTmdb(`/tv/${id}`, {}, apiKey)));
+      collected.push(...res.filter(s => s?.id && s?.name));
+    }
+    const merged = dedupeById(collected);
+    merged.sort((a, b) => new Date(b.first_air_date || 0) - new Date(a.first_air_date || 0));
+    return merged;
+  }
+  if (special === "got_lotr") {
+    const res = await settledValues([
+      fetchTmdb("/search/tv", { query: "Game of Thrones" }, apiKey),
+      fetchTmdb("/search/tv", { query: "House of the Dragon" }, apiKey),
+      fetchTmdb("/search/tv", { query: "The Rings of Power" }, apiKey),
+      fetchTmdb("/search/tv", { query: "The Witcher" }, apiKey),
+    ]);
+    const filtered = res.flatMap(r => r?.results || []).filter(
+      s => (s.vote_count || 0) >= 20 && !(s.genre_ids || []).includes(99)
+    );
+    return dedupeById(filtered);
+  }
+  return [];
+}
 
 function encodeEpisodeId(seriesId, seasonNum, episodeNum) {
   const sid = Number(seriesId);
@@ -233,347 +538,149 @@ function decodeEpisodeId(rawStream) {
   };
 }
 
+async function fetchVodCategoryItems(categoryId, apiKey, { maxPages = 6, today = new Date().toISOString().split("T")[0] } = {}) {
+  const catIdStr = String(categoryId);
+  const catDef = VOD_CATEGORIES.find(c => c.category_id === catIdStr);
+
+  if (catDef?.query?.special) {
+    const raw = await fetchSpecialVodCategory(catDef.query.special, apiKey);
+    return raw.filter(m => isReleasedDate(m.release_date, today));
+  }
+
+  if (["2026", "2025", "2024", "2023"].includes(catIdStr)) {
+    const baseYear = { primary_release_year: catIdStr, "primary_release_date.lte": today };
+    const [revPages, votePages, popPages] = await Promise.all([
+      settledValues([1, 2, 3, 4].map(p => fetchTmdb("/discover/movie", { ...baseYear, sort_by: "revenue.desc", page: String(p) }, apiKey))),
+      settledValues([1, 2, 3, 4].map(p => fetchTmdb("/discover/movie", { ...baseYear, sort_by: "vote_count.desc", page: String(p) }, apiKey))),
+      settledValues([1, 2, 3, 4].map(p => fetchTmdb("/discover/movie", { ...baseYear, sort_by: "popularity.desc", "vote_count.gte": catIdStr >= "2025" ? "10" : "50", page: String(p) }, apiKey))),
+    ]);
+    const combined = dedupeById([
+      ...revPages.flatMap(r => r?.results || []),
+      ...votePages.flatMap(r => r?.results || []),
+      ...popPages.flatMap(r => r?.results || []),
+    ]);
+    return combined.filter(m => isReleasedDate(m.release_date, today) && (m.vote_count || 0) > 0);
+  }
+
+  if (["1012", "1013", "1014"].includes(catIdStr)) {
+    const lang = catDef?.query?.with_original_language || "ko|zh|ja|th|vi";
+    const [votePages, popPages] = await Promise.all([
+      settledValues([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/movie", { with_original_language: lang, "primary_release_date.lte": today, sort_by: "vote_count.desc", page: String(p) }, apiKey))),
+      settledValues([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/movie", { with_original_language: lang, "primary_release_date.lte": today, sort_by: "popularity.desc", "vote_count.gte": "20", page: String(p) }, apiKey))),
+    ]);
+    const combined = dedupeById([
+      ...votePages.flatMap(r => r?.results || []),
+      ...popPages.flatMap(r => r?.results || []),
+    ]);
+    return combined.filter(m => isReleasedDate(m.release_date, today) && (m.vote_count || 0) > 0);
+  }
+
+  let endpoint = "/discover/movie";
+  let baseParams = {
+    sort_by: "primary_release_date.desc",
+    "primary_release_date.lte": today,
+    "vote_count.gte": "5",
+  };
+  if (catDef) {
+    const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
+    if (catEndpoint) {
+      endpoint = catEndpoint;
+      baseParams = { ...cleanQuery };
+    } else {
+      Object.assign(baseParams, cleanQuery);
+    }
+  } else {
+    baseParams.with_genres = catIdStr;
+  }
+
+  const { items } = await fetchPagedTmdb(endpoint, baseParams, maxPages, apiKey);
+  return items.filter(m => isReleasedDate(m.release_date, today) && (m.vote_count || 0) > 0);
+}
+
 /**
  * Get VOD Movie Streams (sorted from newest to oldest, optionally filtered by category_id or search keyword)
  */
-async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageParam = false) {
+async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageParam = false, catalogLoader = null) {
   try {
     const today = new Date().toISOString().split("T")[0];
-    let endpoint = "/discover/movie";
-    let baseParams = {
-      sort_by: "primary_release_date.desc",
-      "primary_release_date.lte": today,
-      "vote_count.gte": "5",
-    };
-
     let results = [];
     let totalCount = null;
 
     if (search && search.trim()) {
-      endpoint = "/search/movie";
-      baseParams = { query: search.trim() };
       const pagesToFetch = hasPageParam ? [page] : [1, 2, 3];
-      const responses = await Promise.all(
-        pagesToFetch.map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
+      const responses = await settledValues(
+        pagesToFetch.map(p => fetchTmdb("/search/movie", { query: search.trim(), page: String(p) }, apiKey))
       );
       if (hasPageParam) {
         totalCount = Math.min(10000, Number(responses[0]?.total_results || 0));
       }
-      const rawList = responses.flatMap(r => r?.results || []);
-      const seen = new Set();
-      for (const item of rawList) {
-        if (item?.id && !seen.has(item.id)) {
-          seen.add(item.id);
-          results.push(item);
-        }
+      results = dedupeById(responses.flatMap(r => r?.results || []));
+      if (!results.length) {
+        const catalog = await resolveCatalog("vod", catalogLoader);
+        const localHits = searchLocalCatalog(catalog, search);
+        const sliced = hasPageParam ? localHits.slice((page - 1) * 20, page * 20) : localHits;
+        const baseNum = hasPageParam ? (page - 1) * 20 : 0;
+        const out = sliced.map((it, idx) => ({ ...it, num: baseNum + idx + 1 }));
+        Object.defineProperty(out, "_totalCount", { value: localHits.length, enumerable: false });
+        return out;
       }
-    } else if (hasPageParam) {
-      if (!isAllCategory(categoryId)) {
-        const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
-        if (catDef?.query?.special === "harry_potter") {
-          const [hpCol, fbCol, hpSearch] = await Promise.all([
-            fetchTmdb("/collection/1241", {}, apiKey),
-            fetchTmdb("/collection/435259", {}, apiKey),
-            fetchTmdb("/search/movie", { query: "Harry Potter" }, apiKey),
-          ]);
-          const raw = [...(hpCol?.parts || []), ...(fbCol?.parts || []), ...(hpSearch?.results || [])];
-          const seen = new Set();
-          const unique = [];
-          for (const item of raw) {
-            if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
-          }
-          totalCount = unique.length;
-          results = unique.slice((page - 1) * 20, page * 20);
-        } else if (catDef?.query?.special === "lotr") {
-          const [lotrCol, hobCol, lotrSearch] = await Promise.all([
-            fetchTmdb("/collection/119", {}, apiKey),
-            fetchTmdb("/collection/121938", {}, apiKey),
-            fetchTmdb("/search/movie", { query: "Lord of the Rings" }, apiKey),
-          ]);
-          const raw = [...(lotrCol?.parts || []), ...(hobCol?.parts || []), ...(lotrSearch?.results || [])];
-          const seen = new Set();
-          const unique = [];
-          for (const item of raw) {
-            if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
-          }
-          totalCount = unique.length;
-          results = unique.slice((page - 1) * 20, page * 20);
-        } else if (catDef?.query?.special === "fast_and_furious") {
-          const [ffCol, ffSearch] = await Promise.all([
-            fetchTmdb("/collection/9485", {}, apiKey),
-            fetchTmdb("/search/movie", { query: "Fast & Furious" }, apiKey),
-          ]);
-          const raw = [...(ffCol?.parts || []), ...(ffSearch?.results || [])];
-          const seen = new Set();
-          const unique = [];
-          for (const item of raw) {
-            if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
-          }
-          totalCount = unique.length;
-          results = unique.slice((page - 1) * 20, page * 20);
-        } else if (catDef?.query?.special === "monsterverse") {
-          const [gz, kong] = await Promise.all([
-            fetchTmdb("/search/movie", { query: "Godzilla" }, apiKey),
-            fetchTmdb("/search/movie", { query: "Kong" }, apiKey),
-          ]);
-          const raw = [...(gz?.results || []), ...(kong?.results || [])];
-          const seen = new Set();
-          const unique = [];
-          for (const item of raw) {
-            if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
-          }
-          totalCount = unique.length;
-          results = unique.slice((page - 1) * 20, page * 20);
-        } else if (catDef?.query?.special === "james_bond") {
-          const bondCol = await fetchTmdb("/collection/645", {}, apiKey);
-          const raw = bondCol?.parts || [];
-          totalCount = raw.length;
-          results = raw.slice((page - 1) * 20, page * 20);
-        } else {
-          if (catDef) {
-            const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
-            if (catEndpoint) {
-              endpoint = catEndpoint;
-              baseParams = { ...cleanQuery };
-            } else {
-              Object.assign(baseParams, cleanQuery);
-            }
+    } else {
+      const catalog = await resolveCatalog("vod", catalogLoader);
+      const catKey = String(categoryId || "");
+      if (catalog && (isAllCategory(categoryId) || Array.isArray(catalog.byCategory?.[catKey]))) {
+        return serveFromCatalog(catalog, categoryId, page, hasPageParam);
+      }
+
+      if (hasPageParam) {
+        if (!isAllCategory(categoryId)) {
+          const catDef = VOD_CATEGORIES.find(c => c.category_id === catKey);
+          if (catDef?.query?.special) {
+            const unique = (await fetchSpecialVodCategory(catDef.query.special, apiKey))
+              .filter(m => isReleasedDate(m.release_date, today));
+            totalCount = unique.length;
+            results = unique.slice((page - 1) * 20, page * 20);
           } else {
-            baseParams.with_genres = String(categoryId);
+            let endpoint = "/discover/movie";
+            let baseParams = { sort_by: "primary_release_date.desc", "primary_release_date.lte": today, "vote_count.gte": "5" };
+            if (catDef) {
+              const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
+              if (catEndpoint) { endpoint = catEndpoint; baseParams = { ...cleanQuery }; }
+              else Object.assign(baseParams, cleanQuery);
+            } else {
+              baseParams.with_genres = catKey;
+            }
+            const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
+            results = json?.results || [];
+            totalCount = Math.min(10000, Number(json?.total_results || results.length));
           }
-          const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
+        } else {
+          const json = await fetchTmdb("/discover/movie", { sort_by: "primary_release_date.desc", "primary_release_date.lte": today, "vote_count.gte": "5", page: String(page) }, apiKey);
           results = json?.results || [];
           totalCount = Math.min(10000, Number(json?.total_results || results.length));
         }
+      } else if (!isAllCategory(categoryId)) {
+        results = await fetchVodCategoryItems(categoryId, apiKey, { maxPages: 6, today });
       } else {
-        const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
-        results = json?.results || [];
-        totalCount = Math.min(10000, Number(json?.total_results || results.length));
-      }
-    } else if (!isAllCategory(categoryId)) {
-      const yearStr = String(categoryId);
-      if (["2026", "2025", "2024", "2023"].includes(yearStr)) {
-        // Multi-angle query for ALL notable blockbusters of the year:
-        // 1. Box Office leaders (revenue.desc)
-        // 2. Most reviewed/voted by audience (vote_count.desc)
-        // 3. Trending/popular releases (popularity.desc)
-        const [revPages, votePages, popPages] = await Promise.all([
-          Promise.all([1, 2, 3, 4].map(p => fetchTmdb(endpoint, { primary_release_year: yearStr, sort_by: "revenue.desc", page: String(p) }, apiKey))),
-          Promise.all([1, 2, 3, 4].map(p => fetchTmdb(endpoint, { primary_release_year: yearStr, sort_by: "vote_count.desc", page: String(p) }, apiKey))),
-          Promise.all([1, 2, 3, 4].map(p => fetchTmdb(endpoint, { primary_release_year: yearStr, sort_by: "popularity.desc", "vote_count.gte": yearStr >= "2025" ? "10" : "50", page: String(p) }, apiKey))),
-        ]);
-
-        const rawList = [
-          ...revPages.flatMap(r => r?.results || []),
-          ...votePages.flatMap(r => r?.results || []),
-          ...popPages.flatMap(r => r?.results || []),
-        ];
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
-          }
-        }
-      } else if (["1012", "1013", "1014"].includes(String(categoryId))) {
-        // Multi-angle query for Asian hits:
-        // 1. Most acclaimed / voted of all time (Parasite, Spirited Away, Train to Busan, Oldboy...)
-        // 2. High popularity trending Asian movies (Exhuma, Godzilla Minus One...)
-        const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
-        const lang = catDef?.query?.with_original_language || "ko|zh|ja|th|vi";
-        const [votePages, popPages] = await Promise.all([
-          Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { with_original_language: lang, sort_by: "vote_count.desc", page: String(p) }, apiKey))),
-          Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { with_original_language: lang, sort_by: "popularity.desc", "vote_count.gte": "20", page: String(p) }, apiKey))),
-        ]);
-
-        const rawList = [
-          ...votePages.flatMap(r => r?.results || []),
-          ...popPages.flatMap(r => r?.results || []),
-        ];
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
-          }
-        }
-      } else if (String(categoryId) === "1018") {
-        // 1018 Harry Potter & Fantastic Beasts (Wizarding World)
-        const [hpCol, fbCol, hpSearch] = await Promise.all([
-          fetchTmdb("/collection/1241", {}, apiKey),
-          fetchTmdb("/collection/435259", {}, apiKey),
-          fetchTmdb("/search/movie", { query: "Harry Potter" }, apiKey),
-        ]);
-        const rawList = [...(hpCol?.parts || []), ...(fbCol?.parts || []), ...(hpSearch?.results || [])];
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
-          }
-        }
-      } else if (String(categoryId) === "1019") {
-        // 1019 Lord of the Rings & The Hobbit
-        const [lotrCol, hobCol, lotrSearch] = await Promise.all([
-          fetchTmdb("/collection/119", {}, apiKey),
-          fetchTmdb("/collection/121938", {}, apiKey),
-          fetchTmdb("/search/movie", { query: "Lord of the Rings" }, apiKey),
-        ]);
-        const rawList = [...(lotrCol?.parts || []), ...(hobCol?.parts || []), ...(lotrSearch?.results || [])];
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
-          }
-        }
-      } else if (String(categoryId) === "1020") {
-        // 1020 Fast & Furious Collection
-        const [ffCol, ffSearch] = await Promise.all([
-          fetchTmdb("/collection/9485", {}, apiKey),
-          fetchTmdb("/search/movie", { query: "Fast & Furious" }, apiKey),
-        ]);
-        const rawList = [...(ffCol?.parts || []), ...(ffSearch?.results || [])];
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
-          }
-        }
-      } else if (String(categoryId) === "1021") {
-        // 1021 MonsterVerse (Godzilla & Kong)
-        const [gz, kong] = await Promise.all([
-          fetchTmdb("/search/movie", { query: "Godzilla" }, apiKey),
-          fetchTmdb("/search/movie", { query: "Kong" }, apiKey),
-        ]);
-        const rawList = [...(gz?.results || []), ...(kong?.results || [])];
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
-          }
-        }
-      } else if (String(categoryId) === "1022") {
-        // 1022 James Bond 007 Collection
-        const bondCol = await fetchTmdb("/collection/645", {}, apiKey);
-        const rawList = bondCol?.parts || [];
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
-          }
-        }
-      } else {
-        // Specific platform or genre category: fetch 10 pages (~200 movies)
-        const catDef = VOD_CATEGORIES.find(c => c.category_id === String(categoryId));
-        if (catDef) {
-          const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
-          if (catEndpoint) {
-            endpoint = catEndpoint;
-            baseParams = { ...cleanQuery };
-          } else {
-            Object.assign(baseParams, cleanQuery);
-          }
-        } else {
-          baseParams.with_genres = String(categoryId);
-        }
-        const responses = await Promise.all(
-          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
+        const batches = await settledValues(
+          VOD_CATEGORIES.map(async (cat) => ({
+            catId: cat.category_id,
+            items: (await fetchVodCategoryItems(cat.category_id, apiKey, { maxPages: 1, today })).slice(0, 20),
+          }))
         );
-        const rawList = responses.flatMap(r => r?.results || []);
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
+        const itemMap = new Map();
+        for (const batch of batches) {
+          for (const item of batch.items) {
+            const existing = itemMap.get(item.id);
+            if (existing) {
+              existing._categoryIdsSet.add(batch.catId);
+            } else {
+              itemMap.set(item.id, { ...item, _assignedCatId: batch.catId, _categoryIdsSet: new Set([batch.catId]) });
+            }
           }
         }
+        results = Array.from(itemMap.values());
+        results.sort((a, b) => new Date(b.release_date || 0) - new Date(a.release_date || 0));
       }
-    } else {
-      // ALL category initial catalog: fetch 1 page per curated category
-      // strictly staying under Cloudflare Pages 50 subrequest limit (34 < 50)
-      const categoryFetches = VOD_CATEGORIES.map(async (cat) => {
-        let catEndpoint = "/discover/movie";
-        let params = { sort_by: "popularity.desc" };
-        if (cat.query?.endpoint) {
-          const { endpoint: ep, special: _sp, ...cleanQuery } = cat.query;
-          catEndpoint = ep;
-          params = { ...cleanQuery };
-        } else if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
-          params.primary_release_year = cat.category_id;
-        } else if (cat.query?.special === "harry_potter") {
-          const [hpCol, fbCol] = await Promise.all([
-            fetchTmdb("/collection/1241", {}, apiKey),
-            fetchTmdb("/collection/435259", {}, apiKey),
-          ]);
-          return {
-            catId: cat.category_id,
-            items: [...(hpCol?.parts || []), ...(fbCol?.parts || [])],
-          };
-        } else if (cat.query?.special === "lotr") {
-          const [lotrCol, hobCol] = await Promise.all([
-            fetchTmdb("/collection/119", {}, apiKey),
-            fetchTmdb("/collection/121938", {}, apiKey),
-          ]);
-          return {
-            catId: cat.category_id,
-            items: [...(lotrCol?.parts || []), ...(hobCol?.parts || [])],
-          };
-        } else if (cat.query?.special === "fast_and_furious") {
-          const ffCol = await fetchTmdb("/collection/9485", {}, apiKey);
-          return {
-            catId: cat.category_id,
-            items: ffCol?.parts || [],
-          };
-        } else if (cat.query?.special === "monsterverse") {
-          const gz = await fetchTmdb("/search/movie", { query: "Godzilla" }, apiKey);
-          return {
-            catId: cat.category_id,
-            items: gz?.results || [],
-          };
-        } else if (cat.query?.special === "james_bond") {
-          const bondCol = await fetchTmdb("/collection/645", {}, apiKey);
-          return {
-            catId: cat.category_id,
-            items: bondCol?.parts || [],
-          };
-        } else if (cat.query) {
-          const { endpoint: _ep, special: _sp, ...cleanQuery } = cat.query;
-          Object.assign(params, cleanQuery);
-        }
-
-        const json = await fetchTmdb(catEndpoint, { ...params, page: "1" }, apiKey);
-        return {
-          catId: cat.category_id,
-          items: json?.results || [],
-        };
-      });
-
-      const batches = await Promise.all(categoryFetches);
-      const itemMap = new Map();
-
-      // Deduplicate across categories by TMDB id and aggregate all matching category_ids
-      for (const batch of batches) {
-        for (const item of (batch.items || []).slice(0, 20)) {
-          if (!item?.id) continue;
-          const existing = itemMap.get(item.id);
-          if (existing) {
-            existing._categoryIdsSet.add(batch.catId);
-          } else {
-            itemMap.set(item.id, {
-              ...item,
-              _assignedCatId: batch.catId,
-              _categoryIdsSet: new Set([batch.catId]),
-            });
-          }
-        }
-      }
-
-      results = Array.from(itemMap.values());
-      results.sort((a, b) => new Date(b.release_date || 0) - new Date(a.release_date || 0));
     }
 
     const baseNum = hasPageParam ? (page - 1) * 20 : 0;
@@ -583,37 +690,11 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
       if (!isAllCategory(categoryId)) {
         primaryCatId = String(categoryId);
       } else if (!m._assignedCatId) {
-        if (year === "2025") primaryCatId = "2025";
-        else if (year === "2024") primaryCatId = "2024";
-        else if (year === "2023") primaryCatId = "2023";
+        if (CURATED_YEARS.has(year)) primaryCatId = year;
         else if (parseInt(year, 10) < 2023) primaryCatId = "1006";
       }
-      const parsedMs = m.release_date ? Date.parse(m.release_date) : NaN;
-      const addedTs = Number.isFinite(parsedMs) ? Math.max(0, Math.floor(parsedMs / 1000)) : 0;
-      const rawCatIds = m._categoryIdsSet
-        ? Array.from(m._categoryIdsSet)
-        : [primaryCatId, CURATED_YEARS.has(year) ? year : null].filter(Boolean);
-      const categoryIds = Array.from(
-        new Set(rawCatIds.map(id => Number(id)).filter(n => Number.isFinite(n) && n > 0))
-      );
-
-      return {
-        num: baseNum + idx + 1,
-        name: year ? `${m.title} (${year})` : m.title,
-        title: m.title,
-        year,
-        stream_type: "movie",
-        stream_id: m.id, // 32-bit tmdbId
-        stream_icon: m.poster_path ? `${TMDB_IMAGE_BASE}/w500${m.poster_path}` : "",
-        rating: String(m.vote_average || 0),
-        rating_5based: Number(((m.vote_average || 0) / 2).toFixed(1)),
-        added: String(addedTs),
-        category_id: primaryCatId,
-        category_ids: categoryIds,
-        container_extension: "mp4",
-        custom_sid: "",
-        direct_source: "",
-      };
+      const item = mapVodItem(m, baseNum + idx, primaryCatId, m._categoryIdsSet || null);
+      return item;
     });
     Object.defineProperty(mapped, "_totalCount", {
       value: hasPageParam ? (totalCount !== null ? totalCount : mapped.length) : mapped.length,
@@ -629,9 +710,13 @@ async function getVodStreams(categoryId, apiKey, page = 1, search = "", hasPageP
 /**
  * Get VOD Info (Details for a specific movie)
  */
-async function getVodInfo(tmdbId, apiKey) {
+async function getVodInfo(tmdbId, apiKey, catalogLoader = null) {
   try {
-    const m = await fetchTmdb(`/movie/${tmdbId}`, { append_to_response: "credits,translations" }, apiKey);
+    const [m, catalog] = await Promise.all([
+      fetchTmdb(`/movie/${tmdbId}`, { append_to_response: "credits,translations" }, apiKey),
+      resolveCatalog("vod", catalogLoader),
+    ]);
+    const catalogItem = catalog?.itemById?.get(Number(tmdbId));
     const year = m.release_date ? m.release_date.substring(0, 4) : "";
     const cast = (m.credits?.cast || []).slice(0, 5).map(c => c.name).join(", ");
     const director = (m.credits?.crew || []).find(c => c.job === "Director")?.name || "";
@@ -674,8 +759,8 @@ async function getVodInfo(tmdbId, apiKey) {
         name: year ? `${m.title} (${year})` : m.title,
         title: m.title,
         year,
-        added: String(Math.floor(Date.now() / 1000)),
-        category_id: CURATED_YEARS.has(year) ? year : "1006",
+        added: catalogItem?.added || String(Math.floor(Date.now() / 1000)),
+        category_id: catalogItem?.category_id || (CURATED_YEARS.has(year) ? year : "1006"),
         container_extension: "mp4",
         custom_sid: "",
         direct_source: "",
@@ -698,7 +783,7 @@ const SERIES_CATEGORIES = [
   { category_id: "2023", category_name: "Series 2023 (Nổi Bật)", parent_id: 0, query: { first_air_date_year: "2023", sort_by: "popularity.desc" } },
 
   // Phim bộ Việt Nam
-  { category_id: "1023", category_name: "Phim Bộ & Truyền Hình Việt Nam", parent_id: 0, query: { with_original_language: "vi", sort_by: "popularity.desc" } },
+  { category_id: "1023", category_name: "Phim Bộ & Truyền Hình Việt Nam", parent_id: 0, query: { with_original_language: "vi", "vote_count.gte": "0", sort_by: "popularity.desc" } },
 
   // Vũ trụ điện ảnh & Thương hiệu đình đám (Franchises & Cinematic Universes)
   { category_id: "1015", category_name: "Series Marvel (MCU)", parent_id: 0, query: { with_companies: "420|7505", sort_by: "popularity.desc" } },
@@ -706,11 +791,22 @@ const SERIES_CATEGORIES = [
   { category_id: "1017", category_name: "Series DC Universe", parent_id: 0, query: { with_companies: "9993|429|128064", sort_by: "popularity.desc" } },
   { category_id: "1019", category_name: "Series Game of Thrones & LOTR", parent_id: 0, query: { special: "got_lotr", sort_by: "popularity.desc" } },
 
-  // Tuyệt tác đỉnh cao
+  // Tuyệt tác, Giải thưởng & Hoạt hình đỉnh cao
+  { category_id: "1040", category_name: "🏆 Series Đoạt Giải (Emmy & Quả Cầu Vàng)", parent_id: 0, query: { special: "award_winning_tv" } },
+  { category_id: "1041", category_name: "📖 Series Dựa Trên Chuyện Có Thật", parent_id: 0, query: { with_keywords: "9672", "vote_average.gte": "7.0", "vote_count.gte": "50", sort_by: "popularity.desc" } },
+  { category_id: "1042", category_name: "🧠 Series Hại Não & Plot Twist", parent_id: 0, query: { with_keywords: "275311|326438|184312|12565|335567", "vote_average.gte": "7.0", "vote_count.gte": "50", sort_by: "vote_count.desc" } },
   { category_id: "1025", category_name: "Series Tuyệt Tác IMDb Top", parent_id: 0, query: { sort_by: "vote_average.desc", "vote_count.gte": "1500" } },
   { category_id: "1006", category_name: "Series Bom Tấn Đỉnh Cao", parent_id: 0, query: { sort_by: "vote_count.desc", "vote_average.gte": "7.5", "vote_count.gte": "500" } },
   { category_id: "1007", category_name: "Series Anime / Hoạt Hình", parent_id: 0, query: { with_genres: "16", sort_by: "popularity.desc" } },
   { category_id: "1011", category_name: "Anime Crunchyroll", parent_id: 0, query: { with_watch_providers: "283", watch_region: "US", sort_by: "popularity.desc" } },
+
+  // Thể loại chính (Core TV Genres)
+  { category_id: "1050", category_name: "💥 Series Hành Động & Phiêu Lưu", parent_id: 0, query: { with_genres: "10759", "vote_count.gte": "100", sort_by: "popularity.desc" } },
+  { category_id: "1051", category_name: "🚀 Series Viễn Tưởng & Kỳ Ảo", parent_id: 0, query: { with_genres: "10765", "vote_count.gte": "100", sort_by: "popularity.desc" } },
+  { category_id: "1053", category_name: "😂 Series Hài Hước / Sitcom", parent_id: 0, query: { with_genres: "35", "vote_count.gte": "100", sort_by: "popularity.desc" } },
+  { category_id: "1054", category_name: "🕵️ Series Hình Sự & Trinh Thám", parent_id: 0, query: { with_genres: "80|9648", "vote_count.gte": "100", sort_by: "popularity.desc" } },
+  { category_id: "1055", category_name: "❤️ Series Tâm Lý", parent_id: 0, query: { with_genres: "18", "vote_count.gte": "150", sort_by: "popularity.desc" } },
+  { category_id: "1057", category_name: "🌍 Series Tài Liệu & Khám Phá", parent_id: 0, query: { with_genres: "99", "vote_count.gte": "50", sort_by: "popularity.desc" } },
 
   // Thiếu nhi & Hoạt hình theo lứa tuổi (Kids & Family by Age)
   { category_id: "1030", category_name: "👶 Series Mầm Non (0-5 tuổi)", parent_id: 0, query: { certification_country: "US", certification: "TV-Y", with_genres: "10762|16", sort_by: "popularity.desc" } },
@@ -745,223 +841,170 @@ async function getSeriesCategories(apiKey) {
   }));
 }
 
+async function fetchSeriesCategoryItems(categoryId, apiKey, { maxPages = 6, today = new Date().toISOString().split("T")[0] } = {}) {
+  const catIdStr = String(categoryId);
+  const catDef = SERIES_CATEGORIES.find(c => c.category_id === catIdStr);
+
+  if (catDef?.query?.special) {
+    const raw = await fetchSpecialSeriesCategory(catDef.query.special, apiKey);
+    return raw.filter(s => !s.first_air_date || isReleasedDate(s.first_air_date, today));
+  }
+
+  if (["2026", "2025", "2024", "2023"].includes(catIdStr)) {
+    const baseYear = { first_air_date_year: catIdStr, "first_air_date.lte": today };
+    const [votePages, popPages] = await Promise.all([
+      settledValues([1, 2, 3, 4].map(p => fetchTmdb("/discover/tv", { ...baseYear, sort_by: "vote_count.desc", page: String(p) }, apiKey))),
+      settledValues([1, 2, 3, 4].map(p => fetchTmdb("/discover/tv", { ...baseYear, sort_by: "popularity.desc", "vote_count.gte": "10", page: String(p) }, apiKey))),
+    ]);
+    const combined = dedupeById([
+      ...votePages.flatMap(r => r?.results || []),
+      ...popPages.flatMap(r => r?.results || []),
+    ]);
+    return combined.filter(s => isReleasedDate(s.first_air_date, today) && (s.vote_count || 0) > 0);
+  }
+
+  if (["1012", "1013", "1014"].includes(catIdStr)) {
+    const lang = catDef?.query?.with_original_language || "ko|zh|ja|th|vi";
+    const [votePages, popPages] = await Promise.all([
+      settledValues([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { with_original_language: lang, "first_air_date.lte": today, sort_by: "vote_count.desc", page: String(p) }, apiKey))),
+      settledValues([1, 2, 3, 4, 5].map(p => fetchTmdb("/discover/tv", { with_original_language: lang, "first_air_date.lte": today, sort_by: "popularity.desc", "vote_count.gte": "10", page: String(p) }, apiKey))),
+    ]);
+    const combined = dedupeById([
+      ...votePages.flatMap(r => r?.results || []),
+      ...popPages.flatMap(r => r?.results || []),
+    ]);
+    return combined.filter(s => isReleasedDate(s.first_air_date, today) && (s.vote_count || 0) > 0);
+  }
+
+  let endpoint = "/discover/tv";
+  let baseParams = {
+    sort_by: "first_air_date.desc",
+    "first_air_date.lte": today,
+    "vote_count.gte": "5",
+  };
+  if (catDef) {
+    const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
+    if (catEndpoint) {
+      endpoint = catEndpoint;
+      baseParams = { ...cleanQuery };
+    } else {
+      Object.assign(baseParams, cleanQuery);
+    }
+  } else {
+    baseParams.with_genres = catIdStr;
+  }
+
+  const { items } = await fetchPagedTmdb(endpoint, baseParams, maxPages, apiKey);
+  const filtered = items.filter(s =>
+    isReleasedDate(s.first_air_date, today) &&
+    (catIdStr === "1023" ? Boolean(s.poster_path) : (s.vote_count || 0) > 0)
+  );
+
+  if (catIdStr === "1001" && !filtered.some(s => s.id === 120998)) {
+    try {
+      const pf = await fetchTmdb("/tv/120998", {}, apiKey);
+      if (pf?.id) filtered.unshift(pf);
+    } catch (_) {}
+  }
+
+  return filtered;
+}
+
 /**
  * Get Series Streams (TV Shows catalog, sorted from newest to oldest, optionally filtered by category_id or search keyword)
  */
-async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPageParam = false) {
+async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPageParam = false, catalogLoader = null) {
   try {
     const today = new Date().toISOString().split("T")[0];
-    let endpoint = "/discover/tv";
-    let baseParams = {
-      sort_by: "first_air_date.desc",
-      "first_air_date.lte": today,
-      "vote_count.gte": "5",
-    };
-
     let results = [];
     let totalCount = null;
 
     if (search && search.trim()) {
-      endpoint = "/search/tv";
-      baseParams = { query: search.trim() };
       const pagesToFetch = hasPageParam ? [page] : [1, 2, 3];
-      const responses = await Promise.all(
-        pagesToFetch.map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
+      const responses = await settledValues(
+        pagesToFetch.map(p => fetchTmdb("/search/tv", { query: search.trim(), page: String(p) }, apiKey))
       );
       if (hasPageParam) {
         totalCount = Math.min(10000, Number(responses[0]?.total_results || 0));
       }
-      const rawList = responses.flatMap(r => r?.results || []);
-      const seen = new Set();
-      for (const item of rawList) {
-        if (item?.id && !seen.has(item.id)) {
-          seen.add(item.id);
-          results.push(item);
-        }
+      results = dedupeById(responses.flatMap(r => r?.results || []));
+      if (!results.length) {
+        const catalog = await resolveCatalog("series", catalogLoader);
+        const localHits = searchLocalCatalog(catalog, search);
+        const sliced = hasPageParam ? localHits.slice((page - 1) * 20, page * 20) : localHits;
+        const baseNum = hasPageParam ? (page - 1) * 20 : 0;
+        const out = sliced.map((it, idx) => ({ ...it, num: baseNum + idx + 1 }));
+        Object.defineProperty(out, "_totalCount", { value: localHits.length, enumerable: false });
+        return out;
       }
-    } else if (hasPageParam) {
-      if (!isAllCategory(categoryId)) {
-        const catDef = SERIES_CATEGORIES.find(c => c.category_id === String(categoryId));
-        if (catDef?.query?.special === "got_lotr") {
-          const [got, hotd, lotr, witcher] = await Promise.all([
-            fetchTmdb("/search/tv", { query: "Game of Thrones" }, apiKey),
-            fetchTmdb("/search/tv", { query: "House of the Dragon" }, apiKey),
-            fetchTmdb("/search/tv", { query: "The Rings of Power" }, apiKey),
-            fetchTmdb("/search/tv", { query: "The Witcher" }, apiKey),
-          ]);
-          const raw = [...(got?.results || []), ...(hotd?.results || []), ...(lotr?.results || []), ...(witcher?.results || [])];
-          const seen = new Set();
-          const unique = [];
-          for (const item of raw) {
-            if (item?.id && !seen.has(item.id)) { seen.add(item.id); unique.push(item); }
-          }
-          totalCount = unique.length;
-          results = unique.slice((page - 1) * 20, page * 20);
-        } else {
-          if (catDef) {
-            const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
-            if (catEndpoint) {
-              endpoint = catEndpoint;
-              baseParams = { ...cleanQuery };
-            } else {
-              Object.assign(baseParams, cleanQuery);
-            }
+    } else {
+      const catalog = await resolveCatalog("series", catalogLoader);
+      const catKey = String(categoryId || "");
+      if (catalog && (isAllCategory(categoryId) || Array.isArray(catalog.byCategory?.[catKey]))) {
+        return serveFromCatalog(catalog, categoryId, page, hasPageParam);
+      }
+
+      if (hasPageParam) {
+        if (!isAllCategory(categoryId)) {
+          const catDef = SERIES_CATEGORIES.find(c => c.category_id === catKey);
+          if (catDef?.query?.special) {
+            const unique = (await fetchSpecialSeriesCategory(catDef.query.special, apiKey))
+              .filter(s => !s.first_air_date || isReleasedDate(s.first_air_date, today));
+            totalCount = unique.length;
+            results = unique.slice((page - 1) * 20, page * 20);
           } else {
-            baseParams.with_genres = String(categoryId);
+            let endpoint = "/discover/tv";
+            let baseParams = { sort_by: "first_air_date.desc", "first_air_date.lte": today, "vote_count.gte": "5" };
+            if (catDef) {
+              const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
+              if (catEndpoint) { endpoint = catEndpoint; baseParams = { ...cleanQuery }; }
+              else Object.assign(baseParams, cleanQuery);
+            } else {
+              baseParams.with_genres = catKey;
+            }
+            const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
+            results = json?.results || [];
+            totalCount = Math.min(10000, Number(json?.total_results || results.length));
           }
-          const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
+        } else {
+          const json = await fetchTmdb("/discover/tv", { sort_by: "first_air_date.desc", "first_air_date.lte": today, "vote_count.gte": "5", page: String(page) }, apiKey);
           results = json?.results || [];
           totalCount = Math.min(10000, Number(json?.total_results || results.length));
         }
+      } else if (!isAllCategory(categoryId)) {
+        results = await fetchSeriesCategoryItems(categoryId, apiKey, { maxPages: 6, today });
       } else {
-        const json = await fetchTmdb(endpoint, { ...baseParams, page: String(page) }, apiKey);
-        results = json?.results || [];
-        totalCount = Math.min(10000, Number(json?.total_results || results.length));
-      }
-    } else if (!isAllCategory(categoryId)) {
-      const yearStr = String(categoryId);
-      if (["2026", "2025", "2024", "2023"].includes(yearStr)) {
-        // Multi-angle query for ALL notable series of the year:
-        // 1. Most voted series (vote_count.desc)
-        // 2. High popularity trending series (popularity.desc)
-        const [votePages, popPages] = await Promise.all([
-          Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { first_air_date_year: yearStr, sort_by: "vote_count.desc", page: String(p) }, apiKey))),
-          Promise.all([1, 2, 3, 4, 5].map(p => fetchTmdb(endpoint, { first_air_date_year: yearStr, sort_by: "popularity.desc", "vote_count.gte": "10", page: String(p) }, apiKey))),
-        ]);
-
-        const rawList = [
-          ...votePages.flatMap(r => r?.results || []),
-          ...popPages.flatMap(r => r?.results || []),
-        ];
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
-          }
-        }
-      } else if (String(categoryId) === "1019") {
-        // 1019 Game of Thrones & Lord of the Rings series
-        const [got, hotd, lotr, witcher] = await Promise.all([
-          fetchTmdb("/search/tv", { query: "Game of Thrones" }, apiKey),
-          fetchTmdb("/search/tv", { query: "House of the Dragon" }, apiKey),
-          fetchTmdb("/search/tv", { query: "The Rings of Power" }, apiKey),
-          fetchTmdb("/search/tv", { query: "The Witcher" }, apiKey),
-        ]);
-        const rawList = [...(got?.results || []), ...(hotd?.results || []), ...(lotr?.results || []), ...(witcher?.results || [])];
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
-          }
-        }
-      } else {
-        // Specific platform or genre category: fetch 10 pages (~200 series)
-        const catDef = SERIES_CATEGORIES.find(c => c.category_id === String(categoryId));
-        if (catDef) {
-          const { endpoint: catEndpoint, special: _sp, ...cleanQuery } = catDef.query || {};
-          if (catEndpoint) {
-            endpoint = catEndpoint;
-            baseParams = { ...cleanQuery };
-          } else {
-            Object.assign(baseParams, cleanQuery);
-          }
-        } else {
-          baseParams.with_genres = String(categoryId);
-        }
-        const responses = await Promise.all(
-          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => fetchTmdb(endpoint, { ...baseParams, page: String(p) }, apiKey))
+        const batches = await settledValues(
+          SERIES_CATEGORIES.map(async (cat) => ({
+            catId: cat.category_id,
+            items: (await fetchSeriesCategoryItems(cat.category_id, apiKey, { maxPages: 1, today })).slice(0, 20),
+          }))
         );
-        const rawList = responses.flatMap(r => r?.results || []);
-        const seen = new Set();
-        for (const item of rawList) {
-          if (item?.id && !seen.has(item.id)) {
-            seen.add(item.id);
-            results.push(item);
+        const itemMap = new Map();
+        for (const batch of batches) {
+          for (const item of batch.items) {
+            const existing = itemMap.get(item.id);
+            if (existing) {
+              existing._categoryIdsSet.add(batch.catId);
+            } else {
+              itemMap.set(item.id, { ...item, _assignedCatId: batch.catId, _categoryIdsSet: new Set([batch.catId]) });
+            }
           }
         }
-
-        // If Peacock category, ensure Poker Face (120998) is always included
-        if (String(categoryId) === "1001" && !seen.has(120998)) {
+        const existingPf = itemMap.get(120998);
+        if (existingPf) {
+          existingPf._categoryIdsSet.add("1001");
+        } else {
           try {
             const pf = await fetchTmdb("/tv/120998", {}, apiKey);
-            if (pf?.id) results.unshift(pf);
+            if (pf?.id) {
+              itemMap.set(pf.id, { ...pf, _assignedCatId: "1001", _categoryIdsSet: new Set(["1001"]) });
+            }
           } catch (_) {}
         }
+        results = Array.from(itemMap.values());
+        results.sort((a, b) => new Date(b.first_air_date || 0) - new Date(a.first_air_date || 0));
       }
-    } else {
-      // ALL category initial catalog: fetch 1 page per curated category
-      // strictly staying under Cloudflare Pages 50 subrequest limit (29 < 50)
-      const categoryFetches = SERIES_CATEGORIES.map(async (cat) => {
-        let catEndpoint = "/discover/tv";
-        let params = { sort_by: "popularity.desc" };
-        if (cat.query?.endpoint) {
-          const { endpoint: ep, special: _sp, ...cleanQuery } = cat.query;
-          catEndpoint = ep;
-          params = { ...cleanQuery };
-        } else if (["2026", "2025", "2024", "2023"].includes(cat.category_id)) {
-          params.first_air_date_year = cat.category_id;
-        } else if (cat.query?.special === "got_lotr") {
-          const [got, hotd] = await Promise.all([
-            fetchTmdb("/search/tv", { query: "Game of Thrones" }, apiKey),
-            fetchTmdb("/search/tv", { query: "House of the Dragon" }, apiKey),
-          ]);
-          return {
-            catId: cat.category_id,
-            items: [...(got?.results || []), ...(hotd?.results || [])],
-          };
-        } else if (cat.query) {
-          const { endpoint: _ep, special: _sp, ...cleanQuery } = cat.query;
-          Object.assign(params, cleanQuery);
-        }
-
-        const json = await fetchTmdb(catEndpoint, { ...params, page: "1" }, apiKey);
-        return {
-          catId: cat.category_id,
-          items: json?.results || [],
-        };
-      });
-
-      const batches = await Promise.all(categoryFetches);
-      const itemMap = new Map();
-
-      // Deduplicate across categories by TMDB id and aggregate all matching category_ids
-      for (const batch of batches) {
-        for (const item of (batch.items || []).slice(0, 20)) {
-          if (!item?.id) continue;
-          const existing = itemMap.get(item.id);
-          if (existing) {
-            existing._categoryIdsSet.add(batch.catId);
-          } else {
-            itemMap.set(item.id, {
-              ...item,
-              _assignedCatId: batch.catId,
-              _categoryIdsSet: new Set([batch.catId]),
-            });
-          }
-        }
-      }
-
-      // Ensure notable series like Poker Face (120998) is included in Peacock (1001)
-      const existingPf = itemMap.get(120998);
-      if (existingPf) {
-        existingPf._categoryIdsSet.add("1001");
-      } else {
-        try {
-          const pf = await fetchTmdb("/tv/120998", {}, apiKey);
-          if (pf?.id) {
-            itemMap.set(pf.id, {
-              ...pf,
-              _assignedCatId: "1001",
-              _categoryIdsSet: new Set(["1001"]),
-            });
-          }
-        } catch (_) {}
-      }
-
-      results = Array.from(itemMap.values());
-      results.sort((a, b) => new Date(b.first_air_date || 0) - new Date(a.first_air_date || 0));
     }
 
     const baseNum = hasPageParam ? (page - 1) * 20 : 0;
@@ -971,47 +1014,10 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
       if (!isAllCategory(categoryId)) {
         primaryCatId = String(categoryId);
       } else if (!s._assignedCatId) {
-        if (year === "2025") primaryCatId = "2025";
-        else if (year === "2024") primaryCatId = "2024";
-        else if (year === "2023") primaryCatId = "2023";
+        if (CURATED_YEARS.has(year)) primaryCatId = year;
         else if (parseInt(year, 10) < 2023) primaryCatId = "1006";
       }
-      const parsedMs = s.first_air_date ? Date.parse(s.first_air_date) : NaN;
-      const airDateTs = s.first_air_date
-        ? String(Number.isFinite(parsedMs) ? Math.max(0, Math.floor(parsedMs / 1000)) : 0)
-        : String(Math.floor(Date.now() / 1000));
-      const rawCatIds = s._categoryIdsSet
-        ? Array.from(s._categoryIdsSet)
-        : [primaryCatId, CURATED_YEARS.has(year) ? year : null].filter(Boolean);
-      const categoryIds = Array.from(
-        new Set(rawCatIds.map(id => Number(id)).filter(n => Number.isFinite(n) && n > 0))
-      );
-      const iconUrl = s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : "";
-      return {
-        num: baseNum + idx + 1,
-        name: year ? `${s.name} (${year})` : s.name,
-        title: s.name,
-        year,
-        stream_type: "series",
-        stream_id: s.id, // Compatibility alias for players expecting stream_id
-        series_id: s.id, // 32-bit tmdbId
-        cover: iconUrl,
-        stream_icon: iconUrl,
-        category_id: primaryCatId,
-        category_ids: categoryIds,
-        plot: s.overview || "",
-        cast: "",
-        director: "",
-        genre: "",
-        releaseDate: s.first_air_date || "",
-        last_modified: airDateTs,
-        added: airDateTs,
-        rating: String(s.vote_average || 0),
-        rating_5based: Number(((s.vote_average || 0) / 2).toFixed(1)),
-        backdrop_path: s.backdrop_path ? [`${TMDB_IMAGE_BASE}/w1280${s.backdrop_path}`] : [],
-        youtube_trailer: "",
-        episode_run_time: "45",
-      };
+      return mapSeriesItem(s, baseNum + idx, primaryCatId, s._categoryIdsSet || null);
     });
     Object.defineProperty(mapped, "_totalCount", {
       value: hasPageParam ? (totalCount !== null ? totalCount : mapped.length) : mapped.length,
@@ -1024,12 +1030,93 @@ async function getSeriesStreams(categoryId, apiKey, page = 1, search = "", hasPa
   }
 }
 
+const BROAD_CATALOG_CATEGORIES = new Set([
+  "1000", "1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010", "1011",
+  "1012", "1013", "1014", "1025", "1041", "1050", "1051", "1052", "1053", "1054", "1055", "1056", "1057",
+  "2023", "2024", "2025", "2026",
+]);
+
+async function buildFullCatalog({ categories, fetchCategory, mapItem, apiKey }) {
+  const today = new Date().toISOString().split("T")[0];
+  const itemMap = new Map();
+  const byCategory = {};
+
+  // Process categories in controlled batches of 4 to avoid TMDB rate limits
+  for (let i = 0; i < categories.length; i += 4) {
+    const batch = categories.slice(i, i + 4);
+    const batchResults = await settledValues(
+      batch.map(async (cat) => ({
+        catId: cat.category_id,
+        list: await fetchCategory(cat.category_id, apiKey, {
+          maxPages: BROAD_CATALOG_CATEGORIES.has(cat.category_id) ? 9 : 6,
+          today,
+        }),
+      }))
+    );
+
+    for (const { catId, list } of batchResults) {
+      const catIds = [];
+      for (const raw of list) {
+        if (!raw?.id) continue;
+        catIds.push(raw.id);
+        const existing = itemMap.get(raw.id);
+        if (existing) {
+          existing.categoryIdsSet.add(catId);
+        } else {
+          itemMap.set(raw.id, {
+            raw,
+            primaryCatId: catId,
+            categoryIdsSet: new Set([catId]),
+          });
+        }
+      }
+      byCategory[catId] = catIds;
+    }
+  }
+
+  const mapped = Array.from(itemMap.values()).map((entry, idx) =>
+    mapItem(entry.raw, idx, entry.primaryCatId, entry.categoryIdsSet)
+  );
+  mapped.sort((a, b) => Number(b.added || 0) - Number(a.added || 0));
+  const items = mapped.map((item, idx) => ({ ...item, num: idx + 1 }));
+
+  return indexCatalog({
+    generatedAt: new Date().toISOString(),
+    totalItems: items.length,
+    categoriesCount: categories.length,
+    items,
+    byCategory,
+  });
+}
+
+async function buildFullVodCatalog(apiKey) {
+  return buildFullCatalog({
+    categories: VOD_CATEGORIES,
+    fetchCategory: fetchVodCategoryItems,
+    mapItem: mapVodItem,
+    apiKey,
+  });
+}
+
+async function buildFullSeriesCatalog(apiKey) {
+  return buildFullCatalog({
+    categories: SERIES_CATEGORIES,
+    fetchCategory: fetchSeriesCategoryItems,
+    mapItem: mapSeriesItem,
+    apiKey,
+  });
+}
+
 /**
  * Get Series Info (Seasons and Episodes breakdown)
  */
-async function getSeriesInfo(seriesId, apiKey) {
+async function getSeriesInfo(seriesId, apiKey, catalogLoader = null) {
   try {
-    const s = await fetchTmdb(`/tv/${seriesId}`, { append_to_response: "credits,translations" }, apiKey);
+    const [s, catalog] = await Promise.all([
+      fetchTmdb(`/tv/${seriesId}`, { append_to_response: "credits,translations" }, apiKey),
+      resolveCatalog("series", catalogLoader),
+    ]);
+    const catalogItem = catalog?.itemById?.get(Number(seriesId));
     const year = s.first_air_date ? s.first_air_date.substring(0, 4) : "";
     const cast = (s.credits?.cast || []).slice(0, 5).map(c => c.name).join(", ");
     const genre = (s.genres || []).map(g => g.name).join(", ");
@@ -1114,13 +1201,13 @@ async function getSeriesInfo(seriesId, apiKey) {
         director: "",
         genre,
         releaseDate: s.first_air_date || "",
-        last_modified: String(Math.floor(Date.now() / 1000)),
+        last_modified: catalogItem?.last_modified || String(Math.floor(Date.now() / 1000)),
         rating: String(s.vote_average || 0),
         rating_5based: Number(((s.vote_average || 0) / 2).toFixed(1)),
         backdrop_path: s.backdrop_path ? [`${TMDB_IMAGE_BASE}/w1280${s.backdrop_path}`] : [],
         youtube_trailer: "",
         episode_run_time: "45",
-        category_id: CURATED_YEARS.has(year) ? year : "1006",
+        category_id: catalogItem?.category_id || (CURATED_YEARS.has(year) ? year : "1006"),
       },
       episodes,
     };
@@ -1175,6 +1262,9 @@ module.exports = {
   isAllCategory,
   encodeEpisodeId,
   decodeEpisodeId,
+  indexCatalog,
+  buildFullVodCatalog,
+  buildFullSeriesCatalog,
   VOD_CATEGORIES,
   SERIES_CATEGORIES,
   getVodCategories,

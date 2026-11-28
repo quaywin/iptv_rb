@@ -1,12 +1,13 @@
 const {
   formatTime,
   getSportIcon,
-  capitalize,
   getLeagueLogo,
   mergeConfig,
   fetchWithFallback,
   buildCandidateUrls,
   PROVIDER_MIRRORS,
+  sanitizeM3uAttr,
+  normalizeSportGroup,
 } = require("../utils/helpers");
 
 /**
@@ -128,16 +129,17 @@ async function generateDamPlaylist(customConfig = {}) {
     const isLive = isLiveMatch(s);
 
     const baseName = s.name || (s.teams?.home?.name && s.teams?.away?.name ? `${s.teams.home.name} vs ${s.teams.away.name}` : "Event");
+    const leagueSuffix = !is24_7 && s.league && !baseName.toLowerCase().includes(String(s.league).toLowerCase()) ? ` [${s.league}]` : "";
 
     let channelName = is24_7
       ? `${baseName} ${sportIcon}`
-      : `${baseName} | ${formatTime(s.starts_at, cfg.timezone)} ${sportIcon}`;
+      : `${baseName}${leagueSuffix} | ${formatTime(s.starts_at, cfg.timezone)} ${sportIcon}`;
 
     if (isLive) {
       channelName = `🔴 ${channelName}`;
     }
 
-    const groupTitle = s.league || capitalize((s.category || "sports").replace(/-/g, " "));
+    const groupTitle = is24_7 ? "📺 24/7 Sports Channels" : normalizeSportGroup(s.category, s.league);
     const defaultLogo = s.teams?.home?.badge || s.poster || "";
     const logo = getLeagueLogo(s.league || s.category, defaultLogo);
 
@@ -151,7 +153,10 @@ async function generateDamPlaylist(customConfig = {}) {
 
     const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(embedUrl)}` : embedUrl;
 
-    m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
+    const safeChannelName = sanitizeM3uAttr(channelName);
+    const safeGroupTitle = sanitizeM3uAttr(groupTitle);
+
+    m3uContent += `#EXTINF:-1 tvg-name="${safeChannelName}" tvg-logo="${logo}" group-title="${safeGroupTitle}",${safeChannelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;
   }
 

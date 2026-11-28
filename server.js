@@ -3,13 +3,14 @@ const path = require("path");
 const config = require("./config");
 const { getRouteHandler } = require("./routes");
 const { handleXtreamRequest } = require("./xtream");
+const { hasM3uStreams } = require("./utils/helpers");
 
 const DATA_DIR = path.join(__dirname, "data");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
 const memoryCache = new Map(); // filename -> { content, timestamp }
 const inFlightRequests = new Map(); // filename -> Promise<string>
-const CACHE_TTL_MS = (config.cacheTtl || 60) * 1000;
+const CACHE_TTL_MS = (config.cacheTtl || 180) * 1000;
 
 /**
  * Get cached playlist or generate on-demand with thundering-herd protection
@@ -41,20 +42,33 @@ async function getOrGeneratePlaylist(filename, generator, pathname = filename) {
   if (!fetchPromise) {
     fetchPromise = (async () => {
       console.log(`[${new Date().toISOString()}] Generating playlist for ${pathname}...`);
-      // Provide customConfig with cache accessor so composite generators like /all can reuse warm caches
-      const generated = await generator({
-        getCachedPlaylist: (subFilename, subGen) => getOrGeneratePlaylist(subFilename, subGen, subFilename),
-      });
+      try {
+        // Provide customConfig with cache accessor so composite generators like /all and /sports can reuse warm caches
+        const generated = await generator({
+          getCachedPlaylist: (subFilename, subGen) => getOrGeneratePlaylist(subFilename, subGen, subFilename),
+        });
 
-      if (generated?.trim()) {
-        memoryCache.set(filename, { content: generated, timestamp: Date.now() });
-        Bun.write(cachePath, generated).catch(() => {});
-        return generated;
+        if (hasM3uStreams(generated)) {
+          memoryCache.set(filename, { content: generated, timestamp: Date.now() });
+          Bun.write(cachePath, generated).catch(() => {});
+          return generated;
+        }
+      } catch (err) {
+        console.warn(`[${new Date().toISOString()}] Generation failed for ${pathname}:`, err.message);
       }
       // If generation failed/empty, fallback to stale cache if present
-      if (cached?.content) {
-        console.warn(`[${new Date().toISOString()}] Generation empty for ${pathname}, using stale cache.`);
+      if (cached?.content && hasM3uStreams(cached.content)) {
+        console.warn(`[${new Date().toISOString()}] Generation empty/failed for ${pathname}, using stale cache.`);
         return cached.content;
+      }
+      if (fs.existsSync(cachePath)) {
+        try {
+          const diskContent = await Bun.file(cachePath).text();
+          if (hasM3uStreams(diskContent)) {
+            console.warn(`[${new Date().toISOString()}] Using disk stale cache for ${pathname}.`);
+            return diskContent;
+          }
+        } catch (e) {}
       }
       return "";
     })().finally(() => {
@@ -110,8 +124,8 @@ const server = Bun.serve({
           "Content-Type": "application/vnd.apple.mpegurl; charset=utf-8",
           "Content-Disposition": `attachment; filename="${route.filename}"`,
           "Access-Control-Allow-Origin": "*",
-          "Cache-Control": `public, max-age=${config.cacheTtl || 60}`,
-          "Cloudflare-CDN-Cache-Control": `max-age=${config.cacheTtl || 60}`
+          "Cache-Control": `public, max-age=${config.cacheTtl || 180}`,
+          "Cloudflare-CDN-Cache-Control": `max-age=${config.cacheTtl || 180}`
         }
       });
     } catch (error) {
@@ -138,6 +152,7 @@ console.log(`- 247:      http://localhost:${server.port}/247`);
 console.log(`- DAM:      http://localhost:${server.port}/dam`);
 console.log(`- PIT:      http://localhost:${server.port}/pit`);
 console.log(`- CINE:     http://localhost:${server.port}/cine`);
+console.log(`- SPORTS:   http://localhost:${server.port}/sports`);
 console.log(`- ALL:      http://localhost:${server.port}/all`);
 console.log(`--- EPG (Electronic Program Guide) ---`);
 console.log(`- Default:  http://localhost:${server.port}/epg`);

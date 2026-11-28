@@ -467,7 +467,128 @@ function buildCandidateUrls(primaryUrl, alternateHosts = [], proxyBaseUrl = null
 }
 
 /**
- * Robust fetch with adaptive ranking, circuit breaker and multi-mirror fallback
+ * Sanitize attribute values for M3U #EXTINF lines (prevents double-quotes/newlines from breaking parsers)
+ */
+function sanitizeM3uAttr(str) {
+  if (str === undefined || str === null) return "";
+  return String(str)
+    .replace(/"/g, "'")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Check whether generated M3U text actually contains at least one stream entry
+ */
+function hasM3uStreams(content) {
+  return Boolean(typeof content === "string" && content.includes("#EXTINF"));
+}
+
+/**
+ * Normalize channel name to identify identical broadcast channels across feeds
+ * e.g. "BEIN SPORTS 3" and "beIN Sport 03" -> "beinsport3"
+ */
+function normalizeChannelKey(name = "") {
+  if (!name) return "";
+  return String(name)
+    .toLowerCase()
+    .replace(/\bsports\b/g, "sport")
+    .replace(/\b0+(\d+)\b/g, "$1")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+/**
+ * Calculate numeric tier for video resolution:
+ * 3 = 4K / UHD / Full HD (1080p)
+ * 2 = HD (720p)
+ * 1 = Default / Unspecified web stream
+ * 0 = SD (480p / 360p)
+ */
+function getQualityRank(qualityStr = "") {
+  const q = String(qualityStr || "").toUpperCase();
+  if (q.includes("4K") || q.includes("UHD") || q.includes("FHD") || q.includes("1080")) {
+    return 3;
+  }
+  if (q.includes("HD") || q.includes("720")) {
+    return 2;
+  }
+  if (q.includes("SD") || q.includes("480") || q.includes("360")) {
+    return 0;
+  }
+  return 1;
+}
+
+/**
+ * Smart Channel Ranking Score:
+ * Prioritizes 4K/FHD > HD > Web/Default > SD, live playback health, viewers, English/EU language, and major broadcasters.
+ */
+function scoreBroadcastChannel(ch, isLive = false) {
+  if (!ch || ch.dead || String(ch.status || "").toLowerCase() === "offline") return -9999;
+  let score = 0;
+
+  const qRank = getQualityRank(ch.quality || ch.name);
+  if (qRank === 3) score += 3000;
+  else if (qRank === 2) score += 1800;
+  else if (qRank === 1) score += 900;
+
+  if (ch.playing || String(ch.status || "").toLowerCase() === "online") {
+    score += isLive ? 400 : 50;
+  }
+
+  const watching = typeof ch.watching === "number" ? ch.watching : (parseInt(ch.watching, 10) || 0);
+  score += Math.min(watching * 2, 150);
+
+  const lang = String(ch.lang || "").toLowerCase();
+  if (lang.includes("en") || lang.includes("english")) {
+    score += 300;
+  } else if (["es", "spanish", "fr", "french", "pt", "portuguese", "de", "german", "it", "italian", "ar", "arabic"].some(l => lang.includes(l))) {
+    score += 120;
+  } else if (lang) {
+    score += 40;
+  }
+
+  const name = String(ch.name || "").toLowerCase();
+  const topBroadcasters = [
+    "tnt", "sky", "espn", "tsn", "sportsnet", "canal", "bein", "dazn", "paramount", "stan", "nbc", "peacock", "supersport", "optus"
+  ];
+  if (topBroadcasters.some(b => name.includes(b))) {
+    score += 150;
+  }
+
+  return score;
+}
+
+/**
+ * Collapse fragmented league/tournament names into ~14 clean sport categories
+ */
+function normalizeSportGroup(sport = "", leagueOrTournament = "") {
+  const s = String(sport || "").toLowerCase().trim();
+  const l = String(leagueOrTournament || "").toLowerCase().trim();
+  const combined = `${s} ${l}`.trim();
+
+  if (/\b24\/7\b|24-7|live shows/.test(combined)) return "📺 24/7 Sports Channels";
+  if (/nba|wnba|basketball|euroleague|eurocup|ncaa.*basketball|fiba|cba/.test(combined)) return "🏀 Basketball";
+  if (/nfl|american football|american-football|ncaa.*football|college football|cfl|redzone/.test(combined)) return "🏈 American Football";
+  if (/nhl|hockey|ice-hockey|khl|ahl|echl/.test(combined)) return "🏒 Ice Hockey";
+  if (/mlb|baseball/.test(combined)) return "⚾ Baseball";
+  if (/tennis|atp|wta|wimbledon|roland garros|us open|australian open/.test(combined)) return "🎾 Tennis";
+  if (/f1|formula|motogp|moto2|moto3|nascar|wrc|rally|mxgp|supercars|motorsport|racing/.test(combined)) return "🏎️ Motorsport / F1";
+  if (/ufc|mma|boxing|combat|fight|wwe|aew|wrestling|bellator|pfl/.test(combined)) return "🥊 Combat / UFC & Boxing";
+  if (/cricket|ipl|willow|t20|odi|test match/.test(combined)) return "🏏 Cricket";
+  if (/rugby|afl|nrl|six nations|super rugby/.test(combined)) return "🏉 Rugby";
+  if (/volleyball/.test(combined)) return "🏐 Volleyball";
+  if (/golf|pga|liv golf|lpga|ryder/.test(combined)) return "⛳ Golf";
+  if (/darts|snooker|billiards|pool/.test(combined)) return "🎯 Darts & Snooker";
+  if (/soccer|football|futsal|premier league|champions league|europa|laliga|la liga|serie a|bundesliga|ligue 1|mls|eredivisie|primeira|fa cup|carabao|efl|copa|world cup|nations league|afc|uefa|fifa|conmebol|concacaf/.test(combined)) {
+    return "⚽ Football / Soccer";
+  }
+  return "🏆 Other Sports";
+}
+
+/**
+ * Robust fetch with adaptive ranking, circuit breaker, multi-mirror fallback, and total time budget
  */
 async function fetchWithFallback(urls, options = {}) {
   const rawList = Array.isArray(urls) ? urls.filter(Boolean) : [urls].filter(Boolean);
@@ -478,12 +599,19 @@ async function fetchWithFallback(urls, options = {}) {
   // Tự động sắp xếp candidate URLs theo độ khỏe, cooldown và phản hồi thực tế
   const urlList = rankCandidateUrls(rawList);
 
-  const timeoutMs = options.timeoutMs || options.timeout || 6000;
+  const timeoutMs = Math.min(options.timeoutMs || options.timeout || 3500, 4500);
+  const maxTotalMs = options.maxTotalMs || 12000;
+  const startedAt = Date.now();
   const responseType = options.responseType || "json";
   const fetchHeaders = options.headers || {};
   let lastError = null;
 
   for (const url of urlList) {
+    if (lastError && (Date.now() - startedAt) >= maxTotalMs) {
+      console.warn(`[fetchWithFallback] Total time budget (${maxTotalMs}ms) reached, aborting remaining mirrors.`);
+      break;
+    }
+
     let timer = null;
     const startTime = Date.now();
     try {
@@ -561,4 +689,10 @@ module.exports = {
   getHostStats,
   hostHealthRegistry,
   mergeConfig,
+  sanitizeM3uAttr,
+  hasM3uStreams,
+  normalizeChannelKey,
+  getQualityRank,
+  scoreBroadcastChannel,
+  normalizeSportGroup,
 };

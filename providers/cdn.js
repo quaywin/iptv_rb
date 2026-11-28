@@ -4,7 +4,21 @@ const {
   fetchWithFallback,
   buildCandidateUrls,
   PROVIDER_MIRRORS,
+  sanitizeM3uAttr,
+  normalizeChannelKey,
+  scoreBroadcastChannel,
+  normalizeSportGroup,
 } = require("../utils/helpers");
+
+const FINISHED_CDN_STATUSES = new Set(["FT", "ENDED", "FINISHED", "AET", "PEN", "CANC", "POSTP", "PST"]);
+const ENGLISH_CHANNEL_CODES = new Set(["US", "USA", "GB", "UK", "AU", "CA", "NZ", "IE"]);
+
+function inferCdnLang(code = "") {
+  const c = String(code || "").toUpperCase().trim();
+  if (!c) return "";
+  if (ENGLISH_CHANNEL_CODES.has(c)) return "en";
+  return c.toLowerCase();
+}
 
 /**
  * Return precise sport emoji based on sport name or tournament
@@ -136,8 +150,9 @@ async function generateCdnPlaylist(customConfig = {}) {
   const minTime = now - (hoursBack * 3600);
   const maxTime = now + (hoursAhead * 3600);
 
-  // Time window filter: keep all live matches; for upcoming, enforce window
+  // Time window filter: exclude finished/cancelled events, keep all live matches, enforce window for upcoming
   const activeEvents = events.filter(e => {
+    if (FINISHED_CDN_STATUSES.has(e.status)) return false;
     const live = isCdnEventLive(e, now);
     if (live) return true;
     if (!e.startsAt) return false;
@@ -172,30 +187,69 @@ async function generateCdnPlaylist(customConfig = {}) {
 
     const formattedTime = evt.startsAt ? formatTime(evt.startsAt, cfg.timezone) : "";
     const timePart = formattedTime ? `| ${formattedTime}` : "";
+    const leagueTag = evt.tournament ? `[${evt.tournament}]` : "";
 
-    const groupTitle = evt.tournament
-      ? `${sportIcon} ${evt.tournament}`.trim()
-      : (evt.sport ? `${sportIcon} ${evt.sport}` : `${sportIcon} CDN Live Events`);
+    const groupTitle = normalizeSportGroup(evt.sport, evt.tournament);
 
     const defaultLogo = evt.countryLogo || evt.homeTeamLogo || "";
 
-    const selectedChannels = evt.channels.slice(0, maxChannels > 0 ? maxChannels : evt.channels.length);
+    // Filter out explicitly offline channels when online alternatives exist, then score & dedupe
+    const onlineOnly = evt.channels.filter(
+      ch => !ch.dead && String(ch.status || "").toLowerCase() !== "offline"
+    );
+    const candidatePool = (onlineOnly.length ? onlineOnly : evt.channels).map(ch => ({
+      ...ch,
+      _score: scoreBroadcastChannel(
+        {
+          name: ch.channel_name || "",
+          status: ch.status,
+          dead: ch.dead,
+          lang: inferCdnLang(ch.channel_code),
+          playing: String(ch.status || "").toLowerCase() === "online",
+        },
+        live
+      ),
+    }));
+    candidatePool.sort((a, b) => b._score - a._score);
+
+    const deduped = [];
+    const seenKeys = new Set();
+    for (const ch of candidatePool) {
+      const key = normalizeChannelKey(ch.channel_name || "");
+      const isGeneric = !key || key.startsWith("server") || key.startsWith("stream");
+      if (!isGeneric) {
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+      }
+      deduped.push(ch);
+    }
+    if (maxChannels > 0 && deduped.length < maxChannels) {
+      for (const ch of candidatePool) {
+        if (!deduped.includes(ch)) {
+          deduped.push(ch);
+          if (deduped.length >= maxChannels) break;
+        }
+      }
+    }
+    const selectedChannels = maxChannels > 0 ? deduped.slice(0, maxChannels) : deduped;
 
     selectedChannels.forEach((ch, idx) => {
       const serverLabel = ch.channel_name || (selectedChannels.length > 1 ? `Server ${idx + 1}` : "");
       const serverPart = serverLabel ? `| ${serverLabel}` : "";
 
-      let channelName = `${evt.title} ${serverPart} ${timePart} ${sportIcon}`.replace(/\s+/g, " ").trim();
+      let channelName = `${evt.title} ${leagueTag} ${serverPart} ${timePart} ${sportIcon}`.replace(/\s+/g, " ").trim();
       if (live) {
         channelName = `🔴 ${channelName}`;
       }
 
+      const safeChannelName = sanitizeM3uAttr(channelName);
+      const safeGroupTitle = sanitizeM3uAttr(groupTitle);
       const logo = ch.image || defaultLogo;
 
       const embedUrl = ch.url || `https://cdnlivetv.tv/api/v1/channels/player/?name=${encodeURIComponent(ch.channel_name || "")}&code=${encodeURIComponent(ch.channel_code || "")}&user=cdnlivetv&plan=free`;
       const streamUrl = base ? `${base}${sep}url=${encodeURIComponent(embedUrl)}` : embedUrl;
 
-      m3uContent += `#EXTINF:-1 tvg-id="${ch.id || evt.gameId || ""}" tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
+      m3uContent += `#EXTINF:-1 tvg-id="${sanitizeM3uAttr(ch.id || evt.gameId || "")}" tvg-name="${safeChannelName}" tvg-logo="${logo}" group-title="${safeGroupTitle}",${safeChannelName}\n`;
       m3uContent += `${streamUrl}\n\n`;
     });
   }

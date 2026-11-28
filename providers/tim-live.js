@@ -7,6 +7,8 @@ const {
   fetchWithFallback,
   buildCandidateUrls,
   PROVIDER_MIRRORS,
+  sanitizeM3uAttr,
+  normalizeSportGroup,
 } = require("../utils/helpers");
 
 const TIM_BROWSER_HEADERS = {
@@ -86,10 +88,10 @@ async function resolveTimEventStream(event, cfg) {
         candidates.push(`${proxyOrigin}/proxy-chunk?url=${encodeURIComponent(directWatch)}`);
       } catch (e) {}
     }
-    const watchUrls = Array.from(new Set(candidates.filter(Boolean)));
+    const watchUrls = Array.from(new Set(candidates.filter(Boolean))).slice(0, 2);
 
     const json = await fetchWithFallback(watchUrls, {
-      timeoutMs: 4000,
+      timeoutMs: 3500,
       headers: {
         "User-Agent": cfg.userAgent,
         ...TIM_BROWSER_HEADERS,
@@ -147,11 +149,12 @@ async function generateTimLivePlaylist(customConfig = {}) {
     return a.starts_at - b.starts_at;
   });
 
-  // Resolve streams in parallel (batches of 10)
+  // Resolve streams in parallel (batches of 10), capped at 15 events (live & soonest first)
   const resolvedEvents = [];
+  const eventsToResolve = validEvents.slice(0, 15);
   const batchSize = 10;
-  for (let i = 0; i < validEvents.length; i += batchSize) {
-    const batch = validEvents.slice(i, i + batchSize);
+  for (let i = 0; i < eventsToResolve.length; i += batchSize) {
+    const batch = eventsToResolve.slice(i, i + batchSize);
     const resolvedUrls = await Promise.all(
       batch.map(ev => resolveTimEventStream(ev, cfg))
     );
@@ -182,12 +185,15 @@ async function generateTimLivePlaylist(customConfig = {}) {
       channelName = `🔴 ${channelName}`;
     }
 
-    const groupTitle = s.category || "Sports";
+    const groupTitle = normalizeSportGroup(s.category);
     const defaultLogo = s.logo || "";
     const logo = getLeagueLogo(s.category, defaultLogo);
     const scrapeUrl = scrapeBase ? `${scrapeBase}${separator}url=${encodeURIComponent(s.streamUrl)}` : s.streamUrl;
 
-    m3uContent += `#EXTINF:-1 tvg-name="${channelName}" tvg-logo="${logo}" group-title="${groupTitle}",${channelName}\n`;
+    const safeChannelName = sanitizeM3uAttr(channelName);
+    const safeGroupTitle = sanitizeM3uAttr(groupTitle);
+
+    m3uContent += `#EXTINF:-1 tvg-name="${safeChannelName}" tvg-logo="${logo}" group-title="${safeGroupTitle}",${safeChannelName}\n`;
     m3uContent += `${scrapeUrl}\n\n`;
   }
 

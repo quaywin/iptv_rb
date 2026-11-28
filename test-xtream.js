@@ -4,7 +4,8 @@ const {
   parseM3uToXtream,
   handleXtreamRequest,
 } = require("./xtream");
-const { buildVodResolverUrl, buildSeriesResolverUrl, encodeEpisodeId, decodeEpisodeId } = require("./providers/tmdb");
+const { buildVodResolverUrl, buildSeriesResolverUrl, encodeEpisodeId, decodeEpisodeId, indexCatalog } = require("./providers/tmdb");
+const { sanitizeM3uAttr, normalizeSportGroup, scoreBroadcastChannel } = require("./utils/helpers");
 const config = require("./config");
 
 async function runXtreamTests() {
@@ -777,6 +778,176 @@ https://stream.example.com/skypl/index.m3u8
     throw new Error(`Expected 200 non-empty bulk catalog for TiviMate in auto mode`);
   }
   console.log("disableBulkVod='auto' (501 for OwnTV, 200 bulk for TiviMate): PASSED");
+
+  // --- Test 7: Pre-Built Static Catalog & Per-Category Consistency ---
+  console.log("\n--- Test 7: Pre-Built Static Catalog & Consistency ---");
+  const fs = require("fs");
+  const path = require("path");
+  const vodCatalogPath = path.join(__dirname, "public", "catalog", "vod.json");
+  const seriesCatalogPath = path.join(__dirname, "public", "catalog", "series.json");
+  if (!fs.existsSync(vodCatalogPath) || !fs.existsSync(seriesCatalogPath)) {
+    throw new Error("Missing public/catalog/vod.json or public/catalog/series.json");
+  }
+
+  const nowLimitSec = Math.floor(Date.now() / 1000) + 86400;
+  if (vodAllStreams.length < 800 || seriesAllStreams.length < 500) {
+    throw new Error(`Expected rich static catalogs (VOD=${vodAllStreams.length}, Series=${seriesAllStreams.length})`);
+  }
+  if (!vodAllStreams.every(v => parseInt(v.added, 10) <= nowLimitSec)) {
+    throw new Error("Unreleased future movie found in VOD catalog");
+  }
+  if (!seriesAllStreams.every(s => parseInt(s.added, 10) <= nowLimitSec)) {
+    throw new Error("Unreleased future show found in Series catalog");
+  }
+
+  const allVodIdSet = new Set(vodAllStreams.map(v => v.stream_id));
+  for (const catCheckId of ["1002", "1004", "1040", "1041", "1042", "1050"]) {
+    const catReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_vod_streams&category_id=${catCheckId}`);
+    const catRes = await handleXtreamRequest({ req: catReq, url: new URL(catReq.url), config, getOrGeneratePlaylist: dummyGetOrGenerate });
+    const catList = await catRes.json();
+    if (!Array.isArray(catList) || catList.length < 15) {
+      throw new Error(`VOD category ${catCheckId} returned too few items (${catList?.length || 0})`);
+    }
+    const missing = catList.filter(item => !allVodIdSet.has(item.stream_id));
+    if (missing.length > 0) {
+      throw new Error(`Category ${catCheckId} has ${missing.length} items missing from ALL bulk catalog`);
+    }
+  }
+  const allSeriesIdSet = new Set(seriesAllStreams.map(s => s.series_id));
+  for (const seriesCatCheckId of ["1040", "1041", "1042", "1050"]) {
+    const sCatReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_series&category_id=${seriesCatCheckId}`);
+    const sCatRes = await handleXtreamRequest({ req: sCatReq, url: new URL(sCatReq.url), config, getOrGeneratePlaylist: dummyGetOrGenerate });
+    const sCatList = await sCatRes.json();
+    if (!Array.isArray(sCatList) || sCatList.length < 15) {
+      throw new Error(`Series category ${seriesCatCheckId} returned too few items (${sCatList?.length || 0})`);
+    }
+    const missing = sCatList.filter(item => !allSeriesIdSet.has(item.series_id));
+    if (missing.length > 0) {
+      throw new Error(`Series category ${seriesCatCheckId} has ${missing.length} items missing from ALL bulk catalog`);
+    }
+  }
+
+  // Verify get_vod_info returns consistent category_id & added from static catalog
+  const sampleCatalogMovie = vodAllStreams[0];
+  const catInfoReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_vod_info&vod_id=${sampleCatalogMovie.stream_id}`);
+  const catInfoRes = await handleXtreamRequest({ req: catInfoReq, url: new URL(catInfoReq.url), config, getOrGeneratePlaylist: dummyGetOrGenerate });
+  const catInfoJson = await catInfoRes.json();
+  if (
+    catInfoJson?.movie_data?.category_id !== sampleCatalogMovie.category_id ||
+    catInfoJson?.movie_data?.added !== sampleCatalogMovie.added
+  ) {
+    throw new Error(
+      `get_vod_info metadata mismatch for ${sampleCatalogMovie.stream_id}: got (${catInfoJson?.movie_data?.category_id}, ${catInfoJson?.movie_data?.added}) vs catalog (${sampleCatalogMovie.category_id}, ${sampleCatalogMovie.added})`
+    );
+  }
+  console.log("Static catalog size, released-only filter & ALL/Per-Category/Info consistency: PASSED");
+
+  // 7b. Custom catalogLoader injection (simulating Cloudflare env.ASSETS)
+  const injectedVod = indexCatalog({
+    generatedAt: "2026-11-28T00:00:00Z",
+    totalItems: 2,
+    categoriesCount: 1,
+    items: [
+      { num: 1, name: "Injected Movie A (2025)", title: "Injected Movie A", year: "2025", stream_type: "movie", stream_id: 999001, stream_icon: "", rating: "8.0", rating_5based: 4, added: "1750000000", category_id: "1002", category_ids: [1002], container_extension: "mp4", custom_sid: "", direct_source: "" },
+      { num: 2, name: "Injected Movie B (2024)", title: "Injected Movie B", year: "2024", stream_type: "movie", stream_id: 999002, stream_icon: "", rating: "7.5", rating_5based: 3.8, added: "1720000000", category_id: "1002", category_ids: [1002], container_extension: "mp4", custom_sid: "", direct_source: "" },
+    ],
+    byCategory: { "1002": [999001, 999002] },
+  });
+  const injectedSeries = indexCatalog({
+    generatedAt: "2026-11-28T00:00:00Z",
+    totalItems: 1,
+    categoriesCount: 1,
+    items: [
+      { num: 1, name: "Injected Show (2025)", title: "Injected Show", year: "2025", stream_type: "series", stream_id: 888001, series_id: 888001, cover: "", stream_icon: "", category_id: "1002", category_ids: [1002], plot: "", cast: "", director: "", genre: "", releaseDate: "2025-01-01", last_modified: "1735689600", added: "1735689600", rating: "8.2", rating_5based: 4.1, backdrop_path: [], youtube_trailer: "", episode_run_time: "45" },
+    ],
+    byCategory: { "1002": [888001] },
+  });
+  const mockCatalogLoader = {
+    getVodCatalog: async () => injectedVod,
+    getSeriesCatalog: async () => injectedSeries,
+  };
+  const injVodReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_vod_streams&category_id=1002&page=1`);
+  const injVodRes = await handleXtreamRequest({ req: injVodReq, url: new URL(injVodReq.url), config, getOrGeneratePlaylist: dummyGetOrGenerate, catalogLoader: mockCatalogLoader });
+  const injVodJson = await injVodRes.json();
+  const injSeriesReq = new Request(`http://localhost:3030/player_api.php?username=strm&password=${currentPass}&action=get_series`);
+  const injSeriesRes = await handleXtreamRequest({ req: injSeriesReq, url: new URL(injSeriesReq.url), config: { ...config, disableBulkVod: false }, getOrGeneratePlaylist: dummyGetOrGenerate, catalogLoader: mockCatalogLoader });
+  const injSeriesJson = await injSeriesRes.json();
+  if (
+    injVodJson.length !== 2 || injVodJson[0].stream_id !== 999001 ||
+    injVodRes.headers.get("X-Total-Count") !== "2" ||
+    injSeriesJson.length !== 1 || injSeriesJson[0].series_id !== 888001
+  ) {
+    throw new Error("Injected catalogLoader test failed");
+  }
+  console.log("Injected catalogLoader (Cloudflare ASSETS mock): PASSED");
+
+  // --- Test 8: Live Sports Optimization (LIVE NOW, sports account, ranking & sanitization) ---
+  console.log("\n--- Test 8: Live Sports Optimization ---");
+
+  // 8a. Virtual "🔴 LIVE NOW" category & sport emoji priority ordering
+  const liveM3uSample = `#EXTM3U
+#EXTINF:-1 tvg-name="Sky F1" group-title="📺 24/7 Sports Channels",Sky F1
+https://stream.example.com/skyf1.m3u8
+#EXTINF:-1 tvg-name="Lakers vs Celtics" group-title="🏀 Basketball",Lakers vs Celtics | 22:00 🏀
+https://stream.example.com/nba.m3u8
+#EXTINF:-1 tvg-name="Arsenal vs Chelsea" group-title="⚽ Football / Soccer",🔴 Arsenal vs Chelsea | 20:00 ⚽
+https://stream.example.com/epl.m3u8
+`;
+  const parsedLive = parseM3uToXtream(liveM3uSample);
+  if (parsedLive.categories[0]?.category_name !== "🔴 LIVE NOW") {
+    throw new Error(`Expected first category to be "🔴 LIVE NOW", got "${parsedLive.categories[0]?.category_name}"`);
+  }
+  if (parsedLive.categories[1]?.category_name !== "⚽ Football / Soccer") {
+    throw new Error(`Expected second category to be "⚽ Football / Soccer", got "${parsedLive.categories[1]?.category_name}"`);
+  }
+  if (parsedLive.categories[parsedLive.categories.length - 1]?.category_name !== "📺 24/7 Sports Channels") {
+    throw new Error(`Expected 24/7 category at bottom, got "${parsedLive.categories[parsedLive.categories.length - 1]?.category_name}"`);
+  }
+  const liveNowCatId = parsedLive.categories[0].category_id;
+  const liveNowStreams = parsedLive.categoryStreams.get(liveNowCatId) || [];
+  if (liveNowStreams.length !== 1 || !liveNowStreams[0].name.includes("Arsenal vs Chelsea")) {
+    throw new Error(`Expected 1 live stream in "🔴 LIVE NOW", got ${liveNowStreams.length}`);
+  }
+  if (parsedLive.streams.length !== 3) {
+    throw new Error(`Expected 3 total streams without duplication, got ${parsedLive.streams.length}`);
+  }
+  if (parsed.categories.some(c => c.category_name === "🔴 LIVE NOW")) {
+    throw new Error("Should NOT add 🔴 LIVE NOW category when no live streams exist");
+  }
+
+  // 8b. sports / sport Xtream credentials
+  const cleanCfg = { ...config, xtreamUsers: "" };
+  const authSports = authenticateUser("sports", currentPass, cleanCfg);
+  const authSportAlias = authenticateUser("sport", currentPass, cleanCfg);
+  if (!authSports.valid || authSports.provider !== "sports" || !authSportAlias.valid || authSportAlias.provider !== "sport") {
+    throw new Error("Failed Xtream auth for sports / sport provider");
+  }
+
+  // 8c. sanitizeM3uAttr, normalizeSportGroup, scoreBroadcastChannel
+  if (sanitizeM3uAttr('Jon "Bones" Jones\nUFC') !== "Jon 'Bones' Jones UFC") {
+    throw new Error("sanitizeM3uAttr failed to escape quotes/newlines");
+  }
+  if (normalizeSportGroup("soccer", "UEFA Champions League") !== "⚽ Football / Soccer") {
+    throw new Error("normalizeSportGroup failed for soccer");
+  }
+  if (normalizeSportGroup("motorsport", "Formula 1 Grand Prix") !== "🏎️ Motorsport / F1") {
+    throw new Error("normalizeSportGroup failed for motorsport");
+  }
+  if (
+    normalizeSportGroup("24/7-streams") !== "📺 24/7 Sports Channels" ||
+    normalizeSportGroup("Football") !== "⚽ Football / Soccer" ||
+    normalizeSportGroup("NBA") !== "🏀 Basketball" ||
+    normalizeSportGroup("UFC") !== "🥊 Combat / UFC & Boxing"
+  ) {
+    throw new Error("normalizeSportGroup failed for representative provider inputs");
+  }
+  const fhdEn = scoreBroadcastChannel({ name: "TNT Sports 1", quality: "FHD", lang: "en", playing: true }, true);
+  const sdAr = scoreBroadcastChannel({ name: "Channel X", quality: "SD", lang: "ar", playing: false }, true);
+  const offCh = scoreBroadcastChannel({ name: "ESPN", quality: "FHD", status: "offline" }, true);
+  if (!(fhdEn > sdAr && offCh < 0)) {
+    throw new Error(`scoreBroadcastChannel ranking invalid: fhdEn=${fhdEn}, sdAr=${sdAr}, offCh=${offCh}`);
+  }
+  console.log("Live Sports LIVE NOW, sports provider, grouping & channel ranking: PASSED");
 
   console.log("\n🎉 ALL XTREAM CODES API & VOD/SERIES TESTS PASSED SUCCESSFULLY! 🎉\n");
 }
